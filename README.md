@@ -82,12 +82,33 @@ project_alpha/
 
 ## Key Features
 
-✅ **Multi-Business Portfolio Management** - Handle up to 5 concurrent businesses
-✅ **7-Stage Lifecycle** - Complete business journey automation
-✅ **5-Check Validation** - Pre-execution safety framework
-✅ **Workflow Templates** - 8 pre-built workflow patterns
-✅ **Tool Integration** - Optional AI-Q, NemoClaw, Zep enhancements
-✅ **Built-in Simulator** - Always-available prediction engine
+- **Multi-Business Portfolio Management** - Handle up to 5 concurrent businesses
+- **7-Stage Lifecycle** - Complete business journey automation
+- **5-Check Validation** - Pre-execution safety framework
+- **Workflow Templates** - 8 pre-built workflow patterns
+- **Tool Integration** - Optional AI-Q, NemoClaw, Zep enhancements
+- **Built-in Simulator** - Always-available prediction engine
+
+## Runtime State (What Changes When You Run)
+
+When the system runs, it creates/modifies files in `project_alpha/`:
+
+| Directory | Purpose | Committed? |
+|-----------|---------|------------|
+| `project_alpha/businesses/` | Active business portfolio state | No (gitignored) |
+| `project_alpha/memory/` | Long-term memory storage | No (gitignored) |
+| `project_alpha/tasks/` | Task queue and history | No (gitignored) |
+
+**Source files** (committed):
+- `core/` - All Python modules
+- `tests/` - Test suite
+- `scripts/` - Utility scripts
+- `docs/` - Documentation
+
+**To reset runtime state**, delete the `project_alpha/` subdirectories:
+```bash
+rm -rf project_alpha/businesses project_alpha/memory project_alpha/tasks
+```
 
 ## Documentation
 
@@ -120,10 +141,27 @@ Expected output: **7/7 checks passed**
 
 ## Git Repository
 
-This is a local git repository:
 - **Branch**: main
-- **Commits**: 4 commits
 - **Remote**: Not configured (local only)
+
+### What to Commit
+
+**Commit these** (source code):
+- `core/` - Core Python modules
+- `tests/` - Test suite
+- `scripts/` - Utility scripts
+- `docs/` - Documentation
+- `main.py`, `run.sh`, `verify.sh` - Entry points
+- `.gitignore` - Ignore rules
+- `project_alpha/__init__.py` - Package init
+- `project_alpha/core` - Symlink to ../core
+
+**Do NOT commit** (runtime state, gitignored):
+- `project_alpha/businesses/` - Runtime business data
+- `project_alpha/memory/` - Runtime memory
+- `project_alpha/tasks/` - Runtime task queue
+- `__pycache__/` - Python bytecode
+- `.pytest_cache/` - Test cache
 
 ## Verification
 

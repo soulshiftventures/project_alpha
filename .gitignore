@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Runtime state (generated when running the system)
+# These files are created/modified during execution
+project_alpha/businesses/
+project_alpha/memory/
+project_alpha/tasks/
+project_alpha/__pycache__/
+
+# Note: project_alpha/__init__.py and project_alpha/core symlink are needed for imports
+# but runtime data directories should not be committed
+
+# Claude Code local settings
+.claude/settings.local.json
