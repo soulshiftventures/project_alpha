@@ -2,19 +2,35 @@
 
 **AI-Powered Business Execution System with Multi-Stage Workflow Management**
 
-## Quick Start
+## Location
+
+```
+/Users/krissanders/Desktop/project_alpha_working
+```
+
+## Quick Start (Operators)
 
 ```bash
 # Navigate to project
-cd ~/Desktop/project_alpha
+cd /Users/krissanders/Desktop/project_alpha_working
 
-# Run Phase 5 system
-python3 main.py "your business idea"
+# Run the system (one command)
+./run.sh "your business idea"
 
-# Verify installation
+# Verify everything works (one command)
+./verify.sh
+```
+
+**Note:** This project runs in **simulator mode** by default. No API keys are required.
+The built-in simulator handles all AI-related operations for testing and development.
+
+## Alternative Commands
+
+```bash
+# Run Phase 5 verification only
 python3 scripts/verify_phase5.py
 
-# Run tests
+# Run test suite only
 python3 -m pytest tests/ -v
 ```
 
@@ -93,8 +109,14 @@ Expected output: **7/7 checks passed**
 ## Requirements
 
 - Python 3.8+
-- Claude/OpenAI API key (set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`)
-- Optional: AI-Q, NemoClaw, Zep API keys for enhancements
+- pytest (for running tests): `pip install pytest`
+
+### Optional (for live AI mode)
+- Claude API key: set `ANTHROPIC_API_KEY` environment variable
+- OpenAI API key: set `OPENAI_API_KEY` environment variable
+- AI-Q, NemoClaw, Zep API keys for optional enhancements
+
+**Without API keys, the system runs in simulator mode with full functionality.**
 
 ## Git Repository
 
@@ -103,8 +125,14 @@ This is a local git repository:
 - **Commits**: 4 commits
 - **Remote**: Not configured (local only)
 
+## Verification
+
+Expected results when running `./verify.sh`:
+- Phase 5 verification: **7/7 checks passed**
+- Test suite: **55 tests passed**
+
 ## Support
 
 - Issues: File an issue or check documentation in `docs/`
 - Architecture Questions: See `docs/ARCHITECTURE_FIX.md`
-- Quick Access: Use `pa` alias or `cd ~/Desktop/project_alpha`
+- Quick Access: `cd /Users/krissanders/Desktop/project_alpha_working`

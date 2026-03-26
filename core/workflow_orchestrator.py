@@ -6,7 +6,12 @@ Handles execution of all stage workflows with full tool integration
 import os
 import json
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class WorkflowOrchestrator:
@@ -114,7 +119,7 @@ class WorkflowOrchestrator:
             return {
                 "type": "zep_memory",
                 "api_key": os.getenv("ZEP_API_KEY"),
-                "session_id": f"project_alpha_{datetime.utcnow().strftime('%Y%m%d')}",
+                "session_id": f"project_alpha_{_utc_now().strftime('%Y%m%d')}",
                 "initialized": True
             }
         except Exception:
@@ -147,13 +152,13 @@ class WorkflowOrchestrator:
         Returns:
             Execution result dictionary
         """
-        workflow_id = f"{business['id']}_{stage}_{datetime.utcnow().isoformat()}"
+        workflow_id = f"{business['id']}_{stage}_{_utc_now().isoformat()}"
 
         result = {
             "workflow_id": workflow_id,
             "business_id": business["id"],
             "stage": stage,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": _utc_now().isoformat(),
             "status": "running",
             "tasks_completed": 0,
             "tasks_total": len(tasks),
@@ -223,7 +228,7 @@ class WorkflowOrchestrator:
                     pass
 
         # Finalize
-        result["completed_at"] = datetime.utcnow().isoformat()
+        result["completed_at"] = _utc_now().isoformat()
         result["status"] = "completed" if result["tasks_completed"] == result["tasks_total"] else "partial"
         result["success_rate"] = result["tasks_completed"] / max(result["tasks_total"], 1)
 
@@ -459,7 +464,7 @@ class WorkflowOrchestrator:
         try:
             # Simulate Zep memory storage (replace with actual API call)
             memory_entry = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": _utc_now().isoformat(),
                 "business_id": business["id"],
                 "business_idea": business["opportunity"]["idea"],
                 "stage": stage,
@@ -556,11 +561,11 @@ class WorkflowOrchestrator:
         Returns:
             Portfolio execution result
         """
-        workflow_id = f"portfolio_{datetime.utcnow().isoformat()}"
+        workflow_id = f"portfolio_{_utc_now().isoformat()}"
 
         result = {
             "workflow_id": workflow_id,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": _utc_now().isoformat(),
             "businesses_count": len(businesses),
             "status": "running",
             "results": []
@@ -583,7 +588,7 @@ class WorkflowOrchestrator:
             result["status"] = "failed"
             result["error"] = str(e)
 
-        result["completed_at"] = datetime.utcnow().isoformat()
+        result["completed_at"] = _utc_now().isoformat()
 
         return result
 

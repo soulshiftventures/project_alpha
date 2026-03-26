@@ -6,8 +6,13 @@ Manages business lifecycle states and transitions
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class LifecycleManager:
@@ -55,7 +60,7 @@ class LifecycleManager:
         Returns:
             Business dictionary in DISCOVERED stage
         """
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = _utc_now().isoformat()
 
         business = {
             "id": str(uuid.uuid4()),
@@ -109,7 +114,7 @@ class LifecycleManager:
         for business in businesses:
             if business["id"] == business_id:
                 business.update(updates)
-                business["updated_at"] = datetime.utcnow().isoformat()
+                business["updated_at"] = _utc_now().isoformat()
                 self.save_businesses(businesses)
                 return
         raise ValueError(f"Business {business_id} not found")
@@ -131,11 +136,11 @@ class LifecycleManager:
             if business["id"] == business_id:
                 old_stage = business["stage"]
                 business["stage"] = new_stage
-                business["updated_at"] = datetime.utcnow().isoformat()
+                business["updated_at"] = _utc_now().isoformat()
 
                 # Add history entry
                 business["history"].append({
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_now().isoformat(),
                     "stage": new_stage,
                     "event": f"Transitioned from {old_stage} to {new_stage}",
                     "details": {"reason": reason}
@@ -164,7 +169,7 @@ class LifecycleManager:
                 # Track performance history
                 if "performance" in metrics:
                     business["metrics"]["performance_history"].append({
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": _utc_now().isoformat(),
                         "value": metrics["performance"]
                     })
                     # Keep only last 10 measurements
@@ -172,7 +177,7 @@ class LifecycleManager:
                         business["metrics"]["performance_history"] = \
                             business["metrics"]["performance_history"][-10:]
 
-                business["updated_at"] = datetime.utcnow().isoformat()
+                business["updated_at"] = _utc_now().isoformat()
                 self.save_businesses(businesses)
                 return
 
@@ -185,7 +190,7 @@ class LifecycleManager:
             if business["id"] == business_id:
                 if task_id not in business["tasks"]:
                     business["tasks"].append(task_id)
-                    business["updated_at"] = datetime.utcnow().isoformat()
+                    business["updated_at"] = _utc_now().isoformat()
                     self.save_businesses(businesses)
                 return
 
@@ -197,12 +202,12 @@ class LifecycleManager:
         for business in businesses:
             if business["id"] == business_id:
                 business["history"].append({
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_now().isoformat(),
                     "stage": business["stage"],
                     "event": event,
                     "details": details
                 })
-                business["updated_at"] = datetime.utcnow().isoformat()
+                business["updated_at"] = _utc_now().isoformat()
                 self.save_businesses(businesses)
                 return
 
