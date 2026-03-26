@@ -15,7 +15,13 @@ class LifecycleManager:
 
     STAGES = ["DISCOVERED", "VALIDATING", "BUILDING", "SCALING", "OPERATING", "OPTIMIZING", "TERMINATED"]
 
-    def __init__(self, businesses_file: str = "project_alpha/businesses/businesses.json"):
+    def __init__(self, businesses_file: str = None):
+        # Allow env override for testing isolation
+        if businesses_file is None:
+            businesses_file = os.environ.get(
+                "PROJECT_ALPHA_BUSINESSES_FILE",
+                "project_alpha/businesses/businesses.json"
+            )
         self.businesses_file = businesses_file
         self._ensure_file_exists()
 

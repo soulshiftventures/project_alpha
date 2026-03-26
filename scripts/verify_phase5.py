@@ -132,16 +132,23 @@ def verify_portfolio_workflows(portfolio_workflows):
     ]
 
     try:
-        # Create mock orchestrator
+        # Create mock orchestrator with required method
         class MockOrchestrator:
-            pass
+            def _execute_task_with_tools(self, task, business, stage, stage_workflows_module):
+                """Mock task execution for testing."""
+                return {
+                    "task_id": task.get("task_id", "mock"),
+                    "status": "completed",
+                    "output": {"message": "Mock execution"},
+                    "success": True
+                }
 
         result = portfolio_workflows.manage_portfolio(mock_businesses, MockOrchestrator())
 
         print(f"  ✓ Portfolio workflow executed")
-        print(f"  ✓ Analyzed {result['businesses_analyzed']} businesses")
-        print(f"  ✓ Portfolio health: {result['portfolio_health']['status']}")
-        print(f"  ✓ Generated {len(result['recommendations'])} recommendations")
+        print(f"  ✓ Processed {result['businesses_processed']} businesses")
+        print(f"  ✓ Executed {result['total_tasks_executed']} tasks")
+        print(f"  ✓ Portfolio size: {result['portfolio_size']}")
 
         return True
     except Exception as e:

@@ -1141,17 +1141,40 @@ class TestIntegration:
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_data():
     """Clean up test data before and after test session."""
-    # Setup: Clean before tests
+    import tempfile
+    import shutil
+
+    # Setup: Create isolated temp directory for test businesses
+    temp_dir = tempfile.mkdtemp(prefix="project_alpha_test_")
+    test_file = os.path.join(temp_dir, "businesses.json")
+    os.environ["PROJECT_ALPHA_BUSINESSES_FILE"] = test_file
+
     yield
-    # Teardown: Clean after tests
-    # (Add cleanup logic if needed for persistent data)
+
+    # Teardown: Clean up temp directory
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    # Remove env var
+    if "PROJECT_ALPHA_BUSINESSES_FILE" in os.environ:
+        del os.environ["PROJECT_ALPHA_BUSINESSES_FILE"]
 
 
 @pytest.fixture(scope="function", autouse=True)
-def reset_execution_count():
-    """Reset execution count between tests."""
+def reset_test_state():
+    """Reset state between tests."""
+    import json
+
+    # Reset execution count
     workflows = StageWorkflows()
     workflows.execution_count = 0
+
+    # Reset businesses file to empty state for each test
+    businesses_file = os.environ.get("PROJECT_ALPHA_BUSINESSES_FILE")
+    if businesses_file:
+        os.makedirs(os.path.dirname(businesses_file), exist_ok=True)
+        with open(businesses_file, 'w') as f:
+            json.dump([], f)
+
     yield
 
 

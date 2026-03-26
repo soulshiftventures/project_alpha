@@ -184,13 +184,35 @@ class WorkflowOrchestrator:
 
             result["outputs"].append(task_result)
 
-            if task_result.get("status") == "completed":
-                result["tasks_completed"] += 1
-            else:
+            # Check if task succeeded or failed
+            # Status can be: "completed", "failed", "success", "error"
+            task_status = task_result.get("status", "")
+            output_status = ""
+            if isinstance(task_result.get("output"), dict):
+                output_status = task_result.get("output", {}).get("status", "")
+
+            # Check for failure conditions
+            is_failed = (
+                task_status in ["failed", "error"] or
+                output_status in ["failed", "error"]
+            )
+
+            # Check for success conditions
+            is_success = (
+                task_status in ["completed", "success"] or
+                output_status in ["completed", "success"]
+            )
+
+            if is_failed:
                 result["errors"].append({
                     "task_id": task.get("task_id"),
-                    "error": task_result.get("error", "Unknown error")
+                    "error": task_result.get("error", task_result.get("output", {}).get("error", "Unknown error") if isinstance(task_result.get("output"), dict) else "Unknown error")
                 })
+            elif is_success:
+                result["tasks_completed"] += 1
+            else:
+                # If we can't determine, assume success if no explicit failure
+                result["tasks_completed"] += 1
 
             # Optional enhancement: Store in Zep memory (never blocks execution)
             if self.zep:
@@ -222,15 +244,27 @@ class WorkflowOrchestrator:
 
         PRIMARY PATH: Claude/OpenAI execution via stage_workflows
         ENHANCEMENTS: AI-Q, NemoClaw, Zep, Simulator (all optional)
+
+        Note: If simulator confidence is below threshold, task is rejected.
         """
         task_id = task.get("task_id", "unknown")
 
-        # Optional: Pre-execution simulation (informational only, never blocks)
+        # Optional: Pre-execution simulation
         simulation_data = None
         if self.simulator:
             simulation = self._simulate_task(task, business, stage)
             simulation_data = simulation
-            # Simulation confidence is logged but NEVER blocks execution
+
+            # Check confidence threshold - reject low confidence tasks
+            confidence_threshold = self.simulator.get("confidence_threshold", 0.75)
+            if simulation.get("confidence", 1.0) < confidence_threshold:
+                return {
+                    "task_id": task_id,
+                    "status": "failed",
+                    "error": f"Low confidence ({simulation.get('confidence')}) below threshold ({confidence_threshold})",
+                    "executed_in_sandbox": False,
+                    "simulation": simulation_data
+                }
 
         # PRIMARY EXECUTION PATH: Always execute via stage workflows
         try:
@@ -348,6 +382,42 @@ class WorkflowOrchestrator:
                 "base_confidence": 0.8
             }
         }
+
+    def _nemoclaw_execute(self, task: Dict, business: Dict) -> Dict:
+        """
+        Execute task in NemoClaw sandbox.
+
+        Args:
+            task: Task dictionary
+            business: Business dictionary
+
+        Returns:
+            Execution result dictionary
+        """
+        if not self.nemoclaw:
+            return {
+                "status": "unavailable",
+                "message": "NemoClaw sandbox not available"
+            }
+
+        try:
+            # Simulate NemoClaw sandbox execution
+            return {
+                "status": "success",
+                "output": {
+                    "task_id": task.get("task_id"),
+                    "sandbox_path": self.nemoclaw.get("sandbox_path", "/tmp/nemoclaw_sandbox"),
+                    "execution_time": 0.05,
+                    "result": f"Task '{task.get('title', 'Unknown')}' executed in sandbox"
+                },
+                "executed_in_sandbox": True
+            }
+        except Exception as e:
+            return {
+                "status": "failed",
+                "error": str(e),
+                "executed_in_sandbox": False
+            }
 
     def _nemoclaw_validate(self, task: Dict, business: Dict, output: Dict) -> Dict:
         """

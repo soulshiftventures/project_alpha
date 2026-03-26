@@ -888,12 +888,14 @@ class WorkflowValidator:
             v.get("confidence", 0.0) for v in self.validation_history
         ) / total
 
+        success_rate = passed / total
         return {
             "total_validations": total,
             "passed_count": passed,
             "failed_count": failed,
             "avg_confidence": avg_confidence,
-            "pass_rate": passed / total,
+            "pass_rate": success_rate,
+            "success_rate": success_rate,  # Alias for backward compatibility
             "recommendations": {
                 "proceed": sum(1 for v in self.validation_history if v.get("recommendation") == "proceed"),
                 "review": sum(1 for v in self.validation_history if v.get("recommendation") == "review"),

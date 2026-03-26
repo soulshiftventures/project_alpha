@@ -210,6 +210,21 @@ class AIClient:
                 "outcomes": ["Working solution", "Quality code"]
             })
 
+    def generate(self, prompt: str, model: str = None, max_tokens: int = 4096, temperature: float = 0.7) -> str:
+        """
+        Generate response from AI. Compatibility method that maps to ask_ai.
+
+        Args:
+            prompt: User prompt to send
+            model: Model to use (ignored, uses configured provider)
+            max_tokens: Maximum tokens to generate (ignored, uses default)
+            temperature: Response randomness (0.0-1.0)
+
+        Returns:
+            AI response text
+        """
+        return self.ask_ai(prompt, temperature=temperature)
+
     def is_available(self) -> bool:
         """Check if AI client is available."""
         return self.provider != "none"
