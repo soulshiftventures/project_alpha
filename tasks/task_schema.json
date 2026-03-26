@@ -1,0 +1,15 @@
+{
+  "project": "project_alpha",
+  "task_id": "",
+  "title": "",
+  "description": "",
+  "status": "pending",
+  "priority": "medium",
+  "dependencies": [],
+  "assigned_agent": "",
+  "input": {},
+  "output": {},
+  "error": "",
+  "created_at": "",
+  "updated_at": ""
+}
