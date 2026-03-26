@@ -10,10 +10,10 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from project_alpha.core.workflow_orchestrator import WorkflowOrchestrator
-from project_alpha.core.stage_workflows import StageWorkflows
-from project_alpha.core.portfolio_workflows import PortfolioWorkflows
-from project_alpha.core.workflow_validator import WorkflowValidator
+from core.workflow_orchestrator import WorkflowOrchestrator
+from core.stage_workflows import StageWorkflows
+from core.portfolio_workflows import PortfolioWorkflows
+from core.workflow_validator import WorkflowValidator
 
 
 def print_section(title):
