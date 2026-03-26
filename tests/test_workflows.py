@@ -11,7 +11,10 @@ from typing import Dict, List
 
 # Import project modules
 import sys
-sys.path.insert(0, '/Users/krissanders/project_alpha')
+import os
+# Add project root to path dynamically
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 from core.workflow_orchestrator import WorkflowOrchestrator
 from core.stage_workflows import StageWorkflows
