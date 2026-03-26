@@ -62,22 +62,26 @@ Phase 5 is the **Business Execution Workflows** system that manages the complete
 ## Project Structure
 
 ```
-project_alpha/
+project_alpha_working/
 ├── main.py                    # Entry point
-├── core/                      # Phase 5 core modules
+├── run.sh                     # One-command runner
+├── verify.sh                  # One-command verification
+├── core/                      # Core Python modules
 │   ├── workflow_orchestrator.py
 │   ├── stage_workflows.py
 │   ├── portfolio_workflows.py
 │   ├── workflow_validator.py
-│   └── lifecycle_manager.py
+│   ├── lifecycle_manager.py
+│   └── ai_client.py
 ├── agents/                    # Execution agents
 │   └── execution/
-├── docs/                      # Documentation
-│   ├── ARCHITECTURE_FIX.md
-│   ├── PHASE5_VERIFICATION.md
-│   └── LOCATION_INFO.md
 ├── tests/                     # Test suite
-└── scripts/                   # Utility scripts
+├── scripts/                   # Utility scripts
+├── docs/                      # Documentation
+└── project_alpha/             # Runtime state (gitignored)
+    ├── businesses/
+    ├── memory/
+    └── tasks/
 ```
 
 ## Key Features
@@ -148,18 +152,15 @@ Expected output: **7/7 checks passed**
 
 **Commit these** (source code):
 - `core/` - Core Python modules
+- `agents/` - Execution agents
 - `tests/` - Test suite
 - `scripts/` - Utility scripts
 - `docs/` - Documentation
 - `main.py`, `run.sh`, `verify.sh` - Entry points
 - `.gitignore` - Ignore rules
-- `project_alpha/__init__.py` - Package init
-- `project_alpha/core` - Symlink to ../core
 
 **Do NOT commit** (runtime state, gitignored):
-- `project_alpha/businesses/` - Runtime business data
-- `project_alpha/memory/` - Runtime memory
-- `project_alpha/tasks/` - Runtime task queue
+- `project_alpha/` - All runtime state directories
 - `__pycache__/` - Python bytecode
 - `.pytest_cache/` - Test cache
 

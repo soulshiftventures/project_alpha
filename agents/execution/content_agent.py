@@ -1,7 +1,7 @@
 from typing import Dict
 import json
 import time
-from project_alpha.core.ai_client import AIClient
+from core.ai_client import AIClient
 
 
 class ContentAgent:

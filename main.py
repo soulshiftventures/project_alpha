@@ -6,22 +6,22 @@ Manages multiple businesses through their complete lifecycle
 
 import sys
 import time
-from project_alpha.core.research_engine import ResearchEngine
-from project_alpha.core.planning_engine import PlanningEngine
-from project_alpha.core.state_manager import StateManager
-from project_alpha.core.execution_engine import ExecutionEngine
-from project_alpha.core.result_collector import ResultCollector
-from project_alpha.core.evaluation_engine import EvaluationEngine
-from project_alpha.core.memory import Memory
-from project_alpha.core.ai_client import AIClient
-from project_alpha.core.lifecycle_manager import LifecycleManager
-from project_alpha.core.portfolio_manager import PortfolioManager
+from core.research_engine import ResearchEngine
+from core.planning_engine import PlanningEngine
+from core.state_manager import StateManager
+from core.execution_engine import ExecutionEngine
+from core.result_collector import ResultCollector
+from core.evaluation_engine import EvaluationEngine
+from core.memory import Memory
+from core.ai_client import AIClient
+from core.lifecycle_manager import LifecycleManager
+from core.portfolio_manager import PortfolioManager
 
 # Phase 5 imports
-from project_alpha.core.workflow_orchestrator import WorkflowOrchestrator
-from project_alpha.core.stage_workflows import StageWorkflows
-from project_alpha.core.portfolio_workflows import PortfolioWorkflows
-from project_alpha.core.workflow_validator import WorkflowValidator
+from core.workflow_orchestrator import WorkflowOrchestrator
+from core.stage_workflows import StageWorkflows
+from core.portfolio_workflows import PortfolioWorkflows
+from core.workflow_validator import WorkflowValidator
 
 
 def print_banner():

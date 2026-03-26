@@ -33,14 +33,8 @@ htmlcov/
 .LSOverride
 
 # Runtime state (generated when running the system)
-# These files are created/modified during execution
-project_alpha/businesses/
-project_alpha/memory/
-project_alpha/tasks/
-project_alpha/__pycache__/
-
-# Note: project_alpha/__init__.py and project_alpha/core symlink are needed for imports
-# but runtime data directories should not be committed
+# The entire project_alpha/ directory is for runtime data only
+project_alpha/
 
 # Claude Code local settings
 .claude/settings.local.json

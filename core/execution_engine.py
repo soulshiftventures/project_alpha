@@ -12,9 +12,9 @@ class ExecutionEngine:
     def _load_agents(self):
         """Dynamically load all available agents."""
         agent_modules = {
-            "builder": "project_alpha.agents.execution.builder_agent",
-            "automation": "project_alpha.agents.execution.automation_agent",
-            "content": "project_alpha.agents.execution.content_agent"
+            "builder": "agents.execution.builder_agent",
+            "automation": "agents.execution.automation_agent",
+            "content": "agents.execution.content_agent"
         }
 
         for agent_name, module_path in agent_modules.items():
