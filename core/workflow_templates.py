@@ -1,5 +1,5 @@
 """
-Workflow Templates for Project Alpha Phase 5
+Workflow Templates for Project Alpha
 8 pre-built templates with full tool integration (AI-Q, NemoClaw, Zep, Simulator)
 Ready for copy-paste production use.
 """

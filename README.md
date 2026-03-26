@@ -27,16 +27,16 @@ The built-in simulator handles all AI-related operations for testing and develop
 ## Alternative Commands
 
 ```bash
-# Run Phase 5 verification only
-python3 scripts/verify_phase5.py
+# Run integration verification only
+python3 scripts/verify_system.py
 
 # Run test suite only
 python3 -m pytest tests/ -v
 ```
 
-## What is Phase 5?
+## Overview
 
-Phase 5 is the **Business Execution Workflows** system that manages the complete lifecycle of AI-discovered business opportunities through 7 stages:
+Project Alpha is a **Business Execution Workflows** system that manages the complete lifecycle of AI-discovered business opportunities through 7 stages:
 
 1. **DISCOVERED** - Initial opportunity identification
 2. **VALIDATING** - Market and feasibility validation
@@ -116,17 +116,17 @@ rm -rf project_alpha/businesses project_alpha/memory project_alpha/tasks
 
 ## Documentation
 
-- **Quick Start**: `docs/QUICK_START_PHASE5.md`
-- **Architecture**: `docs/ARCHITECTURE_FIX.md`
-- **Verification**: `docs/PHASE5_VERIFICATION.md`
-- **Phase Summary**: `docs/PHASE_5_SUMMARY.md`
+- **Quick Start**: `docs/QUICK_START.md`
+- **Architecture**: `docs/ARCHITECTURE.md`
+- **Verification**: `docs/VERIFICATION.md`
+- **System Summary**: `docs/SYSTEM_SUMMARY.md`
 
 ## Verification
 
 Run the complete verification suite:
 
 ```bash
-python3 scripts/verify_phase5.py
+./verify.sh
 ```
 
 Expected output: **7/7 checks passed**
@@ -167,11 +167,11 @@ Expected output: **7/7 checks passed**
 ## Verification
 
 Expected results when running `./verify.sh`:
-- Phase 5 verification: **7/7 checks passed**
+- Integration verification: **7/7 checks passed**
 - Test suite: **55 tests passed**
 
 ## Support
 
 - Issues: File an issue or check documentation in `docs/`
-- Architecture Questions: See `docs/ARCHITECTURE_FIX.md`
+- Architecture Questions: See `docs/ARCHITECTURE.md`
 - Quick Access: `cd /Users/krissanders/Desktop/project_alpha_working`

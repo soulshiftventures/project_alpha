@@ -2,7 +2,7 @@
 # Project Alpha Verification Script
 # Usage: ./verify.sh
 #
-# Runs both Phase 5 verification and the full test suite.
+# Runs both integration verification and the full test suite.
 # All tests run in simulator mode - no API keys required.
 
 set -e
@@ -20,13 +20,13 @@ echo "========================================"
 echo ""
 
 # Track results
-PHASE5_RESULT=0
+INTEGRATION_RESULT=0
 TESTS_RESULT=0
 
-# Step 1: Run Phase 5 verification
-echo "Step 1: Running Phase 5 integration verification..."
+# Step 1: Run integration verification
+echo "Step 1: Running integration verification..."
 echo "--------"
-python3 "$SCRIPT_DIR/scripts/verify_phase5.py" || PHASE5_RESULT=$?
+python3 "$SCRIPT_DIR/scripts/verify_system.py" || INTEGRATION_RESULT=$?
 echo ""
 
 # Step 2: Run pytest suite
@@ -41,10 +41,10 @@ echo " VERIFICATION SUMMARY"
 echo "========================================"
 echo ""
 
-if [ $PHASE5_RESULT -eq 0 ]; then
-    echo "  ✓ Phase 5 verification: PASSED (7/7 checks)"
+if [ $INTEGRATION_RESULT -eq 0 ]; then
+    echo "  ✓ Integration verification: PASSED (7/7 checks)"
 else
-    echo "  ✗ Phase 5 verification: FAILED"
+    echo "  ✗ Integration verification: FAILED"
 fi
 
 if [ $TESTS_RESULT -eq 0 ]; then
@@ -56,7 +56,7 @@ fi
 echo ""
 
 # Exit with error if either failed
-if [ $PHASE5_RESULT -ne 0 ] || [ $TESTS_RESULT -ne 0 ]; then
+if [ $INTEGRATION_RESULT -ne 0 ] || [ $TESTS_RESULT -ne 0 ]; then
     echo "Some verifications failed. Check output above for details."
     exit 1
 fi

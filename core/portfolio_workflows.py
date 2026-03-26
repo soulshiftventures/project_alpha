@@ -1,5 +1,5 @@
 """
-Portfolio Workflows for Project Alpha Phase 5
+Portfolio Workflows for Project Alpha
 Manages up to 5 concurrent businesses with intelligent task prioritization,
 load balancing, and portfolio-level health monitoring.
 """

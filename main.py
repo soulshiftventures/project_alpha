@@ -17,7 +17,7 @@ from core.ai_client import AIClient
 from core.lifecycle_manager import LifecycleManager
 from core.portfolio_manager import PortfolioManager
 
-# Phase 5 imports
+# Workflow imports
 from core.workflow_orchestrator import WorkflowOrchestrator
 from core.stage_workflows import StageWorkflows
 from core.portfolio_workflows import PortfolioWorkflows
@@ -28,7 +28,7 @@ def print_banner():
     """Print system banner."""
     print("\n" + "=" * 70)
     print(" PROJECT ALPHA - BUSINESS LIFECYCLE ENGINE")
-    print(" Continuous Portfolio Management System - Phase 5")
+    print(" Continuous Portfolio Management System")
     print(" Integrated Workflow Orchestration")
     print("=" * 70 + "\n")
 
@@ -160,7 +160,7 @@ def main():
     lifecycle_manager = LifecycleManager()
     portfolio_manager = PortfolioManager(max_active=5)
 
-    # Phase 5: Initialize workflow system
+    # Initialize workflow system
     workflow_orchestrator = WorkflowOrchestrator()
     stage_workflows = StageWorkflows()
     portfolio_workflows = PortfolioWorkflows()
@@ -168,13 +168,13 @@ def main():
 
     # Display tool status
     tool_status = workflow_orchestrator.get_tool_status()
-    print("\n[PHASE 5] Workflow Tool Status:")
+    print("\nWorkflow Tool Status:")
     print(f"  AI-Q:      {'✓ Available' if tool_status['ai_q']['available'] else '✗ Not Available'}")
     print(f"  NemoClaw:  {'✓ Available' if tool_status['nemoclaw']['available'] else '✗ Not Available'}")
     print(f"  Zep:       {'✓ Available' if tool_status['zep']['available'] else '✗ Not Available'}")
     print(f"  Simulator: {'✓ Available' if tool_status['simulator']['available'] else '✗ Not Available'}")
 
-    print("\n🚀 BUSINESS LIFECYCLE ENGINE - Starting Continuous Operation (Phase 5)\n")
+    print("\n🚀 BUSINESS LIFECYCLE ENGINE - Starting Continuous Operation\n")
 
     iteration = 0
     max_iterations = 50  # Limit iterations for testing (use 1000 for production)
@@ -250,10 +250,10 @@ def main():
                 if len(pending_tasks) == 0:
                     print(f"  → Generating {current_stage} tasks...")
 
-                    # Phase 5: Use stage workflows for task generation
+                    # Use stage workflows for task generation
                     new_tasks = stage_workflows.get_tasks_for_stage(current_stage, business)
 
-                    # Fallback to Phase 4 if no tasks generated
+                    # Fallback if no tasks generated
                     if not new_tasks:
                         new_tasks = planning_engine.create_stage_tasks(business, current_stage)
 
@@ -299,7 +299,7 @@ def main():
                     print(f"    Business: {business['opportunity']['idea'][:45]}")
                     print(f"    Agent: {task['assigned_agent']}")
 
-                    # Phase 5: Validate task before execution
+                    # Validate task before execution
                     is_valid, validation_errors = workflow_validator.validate_stage_workflow(
                         business=business,
                         stage=business["stage"],
@@ -317,7 +317,7 @@ def main():
                     # Execute
                     state_manager.update_task(task["task_id"], {"status": "in_progress"})
 
-                    # Phase 5: Use workflow orchestrator for execution with tool integration
+                    # Use workflow orchestrator for execution with tool integration
                     workflow_result = workflow_orchestrator.execute_stage_workflow(
                         business=business,
                         stage=business["stage"],
@@ -363,13 +363,13 @@ def main():
 
                     time.sleep(0.05)
 
-        # PHASE 4: REPORTING (Enhanced with Phase 5)
+        # REPORTING
         if iteration % 5 == 0:  # Every 5 cycles - Portfolio review
             print(f"\n{'='*70}")
-            print("PORTFOLIO REVIEW (PHASE 5)")
+            print("PORTFOLIO REVIEW")
             print(f"{'='*70}")
 
-            # Phase 5: Portfolio workflow validation and execution
+            # Portfolio workflow validation and execution
             active_businesses = portfolio_manager.get_active_businesses()
 
             if active_businesses:
@@ -437,9 +437,9 @@ def main():
         # Brief sleep to prevent tight loop
         time.sleep(0.1)
 
-    # FINAL REPORT (Phase 5 Enhanced)
+    # FINAL REPORT
     print(f"\n{'='*70}")
-    print("FINAL REPORT - PHASE 5")
+    print("FINAL REPORT")
     print(f"{'='*70}\n")
 
     stats = portfolio_manager.get_portfolio_stats()
@@ -456,31 +456,31 @@ def main():
     print(f"  Successful Tasks: {memory_stats['successful_tasks']}")
     print(f"  Failed Tasks: {memory_stats['failed_tasks']}")
 
-    # Phase 5: Workflow execution statistics
-    print(f"\n[PHASE 5] Workflow Execution Summary:")
+    # Workflow execution statistics
+    print(f"\nWorkflow Execution Summary:")
     workflow_stats = workflow_orchestrator.get_execution_stats()
     print(f"  Total Workflows: {workflow_stats['total_workflows']}")
     print(f"  Total Tasks: {workflow_stats['total_tasks']}")
     print(f"  Completed Tasks: {workflow_stats['completed_tasks']}")
     print(f"  Success Rate: {workflow_stats['success_rate']:.2%}")
 
-    # Phase 5: Validation statistics
+    # Validation statistics
     validation_stats = workflow_validator.get_validation_statistics()
-    print(f"\n[PHASE 5] Workflow Validation Summary:")
+    print(f"\nWorkflow Validation Summary:")
     print(f"  Total Validations: {validation_stats['total_validations']}")
     print(f"  Passed: {validation_stats['passed_count']}")
     print(f"  Failed: {validation_stats['failed_count']}")
     print(f"  Pass Rate: {validation_stats['pass_rate']:.2%}")
     print(f"  Avg Confidence: {validation_stats['avg_confidence']:.2%}")
 
-    # Phase 5: Portfolio management summary
-    print(f"\n[PHASE 5] Portfolio Management Summary:")
+    # Portfolio management summary
+    print(f"\nPortfolio Management Summary:")
     print(f"  Portfolio Reviews: {portfolio_workflows.get_review_count()}")
     print(f"  Rebalancing Actions: {len(portfolio_workflows.get_rebalancing_history())}")
 
-    # Phase 5: Tool integration summary
+    # Tool integration summary
     tool_status = workflow_orchestrator.get_tool_status()
-    print(f"\n[PHASE 5] Tool Integration Status:")
+    print(f"\nTool Integration Status:")
     for tool_name, status in tool_status.items():
         available = "✓" if status["available"] else "✗"
         print(f"  {available} {tool_name.upper()}: {status['initialized']}")
@@ -493,7 +493,7 @@ def main():
         )
 
     print("\n" + "=" * 70)
-    print("\n🎉 BUSINESS_LIFECYCLE_ENGINE_READY (Phase 5 Integration Complete)\n")
+    print("\n🎉 BUSINESS_LIFECYCLE_ENGINE_READY\n")
 
     return 0
 

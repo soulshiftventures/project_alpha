@@ -1,5 +1,5 @@
 """
-Workflow Orchestrator for Project Alpha Phase 5
+Workflow Orchestrator for Project Alpha
 Handles execution of all stage workflows with full tool integration
 """
 
