@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Goals - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Goal Submission</h1>
+    <p class="subtitle">Submit requests to the system</p>
+</div>
+
+<div class="two-column">
+    <section class="panel">
+        <h2>Submit New Goal</h2>
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        <form action="{{ url_for('submit_goal') }}" method="POST" class="form">
+            <div class="form-group">
+                <label for="objective">Objective *</label>
+                <textarea id="objective" name="objective" rows="3" required placeholder="What do you want to accomplish?"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="business_id">Business (optional)</label>
+                <input type="text" id="business_id" name="business_id" placeholder="Business ID">
+            </div>
+            <div class="form-group">
+                <label for="stage">Stage (optional)</label>
+                <select id="stage" name="stage">
+                    <option value="">-- Select Stage --</option>
+                    <option value="ideation">Ideation</option>
+                    <option value="validation">Validation</option>
+                    <option value="development">Development</option>
+                    <option value="launch">Launch</option>
+                    <option value="growth">Growth</option>
+                    <option value="optimization">Optimization</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="priority">Priority</label>
+                <select id="priority" name="priority">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="notes">Notes (optional)</label>
+                <textarea id="notes" name="notes" rows="2" placeholder="Additional context"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit Goal</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>Recent Submissions</h2>
+        {% if history %}
+        <ul class="history-list">
+            {% for item in history %}
+            <li class="history-item">
+                <div class="history-header">
+                    <span class="history-id">{{ item.request_id[:8] }}...</span>
+                    <span class="status-badge {{ item.status }}">{{ item.status }}</span>
+                </div>
+                <p class="history-objective">{{ item.objective[:100] }}{% if item.objective|length > 100 %}...{% endif %}</p>
+                <span class="history-time">{{ item.timestamp }}</span>
+                {% if item.execution_plan %}
+                <a href="{{ url_for('plan_detail', request_id=item.request_id) }}" class="link-small">View Plan</a>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No recent submissions</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

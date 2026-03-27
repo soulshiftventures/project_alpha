@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Backends - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Available Backends</h1>
+    <p class="subtitle">Execution backends and runtime statistics</p>
+</div>
+
+<section class="panel">
+    <h2>Runtime Statistics</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.total_backends or 0 }}</span>
+            <span class="stat-label">Total Backends</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.active_backends or 0 }}</span>
+            <span class="stat-label">Active</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.total_jobs_processed or 0 }}</span>
+            <span class="stat-label">Jobs Processed</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>Registered Backends</h2>
+    {% if backends %}
+    <div class="card-grid">
+        {% for backend in backends %}
+        <div class="card">
+            <div class="card-header">
+                <h3>{{ backend.name }}</h3>
+                <span class="status-badge {{ 'active' if backend.enabled else 'inactive' }}">
+                    {{ 'Active' if backend.enabled else 'Inactive' }}
+                </span>
+            </div>
+            <div class="card-body">
+                <dl class="detail-list-compact">
+                    <dt>Type</dt>
+                    <dd>{{ backend.backend_type }}</dd>
+                    <dt>Capabilities</dt>
+                    <dd>{{ backend.capabilities | join(', ') if backend.capabilities else 'N/A' }}</dd>
+                </dl>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No backends registered</p>
+    {% endif %}
+</section>
+{% endblock %}

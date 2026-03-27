@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Portfolio</h1>
+    <p class="subtitle">Active businesses and initiatives</p>
+</div>
+
+{% if businesses %}
+<div class="card-grid">
+    {% for business in businesses %}
+    <div class="card">
+        <div class="card-header">
+            <h3>{{ business.name }}</h3>
+            <span class="stage-badge {{ business.stage }}">{{ business.stage }}</span>
+        </div>
+        <div class="card-body">
+            <p>{{ business.description or 'No description' }}</p>
+            <div class="card-meta">
+                <span>Created: {{ business.created_at }}</span>
+            </div>
+        </div>
+        <div class="card-footer">
+            <a href="{{ url_for('portfolio_detail', business_id=business.business_id) }}" class="btn btn-secondary">View Details</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state-large">
+    <p>No businesses in portfolio yet.</p>
+    <a href="{{ url_for('goals') }}" class="btn btn-primary">Submit a Goal</a>
+</div>
+{% endif %}
+{% endblock %}

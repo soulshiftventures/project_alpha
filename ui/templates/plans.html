@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Execution Plans - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Execution Plans</h1>
+    <p class="subtitle">View and track execution plans</p>
+</div>
+
+{% if plans %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Request ID</th>
+            <th>Objective</th>
+            <th>Status</th>
+            <th>Steps</th>
+            <th>Created</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for plan in plans %}
+        <tr>
+            <td><code>{{ plan.request_id[:8] }}...</code></td>
+            <td>{{ plan.objective[:50] }}{% if plan.objective|length > 50 %}...{% endif %}</td>
+            <td><span class="status-badge {{ plan.status }}">{{ plan.status }}</span></td>
+            <td>{{ plan.step_count }}</td>
+            <td>{{ plan.created_at }}</td>
+            <td><a href="{{ url_for('plan_detail', request_id=plan.request_id) }}" class="btn btn-small">View</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state-large">
+    <p>No execution plans yet.</p>
+    <a href="{{ url_for('goals') }}" class="btn btn-primary">Submit a Goal</a>
+</div>
+{% endif %}
+{% endblock %}

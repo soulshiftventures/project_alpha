@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Approvals - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Approval Queue</h1>
+    <p class="subtitle">Review and approve pending requests</p>
+</div>
+
+<section class="panel">
+    <h2>Pending Approvals ({{ pending|length }})</h2>
+    {% if pending %}
+    <div class="approval-list">
+        {% for item in pending %}
+        <div class="approval-card">
+            <div class="approval-header">
+                <span class="approval-type">{{ item.request_type }}</span>
+                <span class="priority-badge {{ item.priority }}">{{ item.priority }}</span>
+            </div>
+            <div class="approval-body">
+                <p class="approval-description">{{ item.description }}</p>
+                <dl class="approval-meta">
+                    <dt>Requester</dt>
+                    <dd>{{ item.requester }}</dd>
+                    <dt>Submitted</dt>
+                    <dd>{{ item.created_at }}</dd>
+                </dl>
+            </div>
+            <div class="approval-actions">
+                <form action="{{ url_for('approve', record_id=item.record_id) }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-success">Approve</button>
+                </form>
+                <form action="{{ url_for('deny', record_id=item.record_id) }}" method="POST" style="display:inline;">
+                    <input type="hidden" name="reason" value="Denied by operator">
+                    <button type="submit" class="btn btn-danger">Deny</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No pending approvals</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <h2>Recent History</h2>
+    {% if history %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Decided By</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in history %}
+            <tr>
+                <td>{{ item.request_type }}</td>
+                <td>{{ item.description[:50] }}{% if item.description|length > 50 %}...{% endif %}</td>
+                <td><span class="status-badge {{ item.status }}">{{ item.status }}</span></td>
+                <td>{{ item.decided_by or '-' }}</td>
+                <td>{{ item.decided_at or item.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No approval history</p>
+    {% endif %}
+</section>
+{% endblock %}

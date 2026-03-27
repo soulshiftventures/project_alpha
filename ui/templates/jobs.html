@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Job Monitor</h1>
+    <p class="subtitle">Track running and completed jobs</p>
+</div>
+
+<section class="panel">
+    <h2>Statistics</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.pending or 0 }}</span>
+            <span class="stat-label">Pending</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.running or 0 }}</span>
+            <span class="stat-label">Running</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.completed or 0 }}</span>
+            <span class="stat-label">Completed</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.failed or 0 }}</span>
+            <span class="stat-label">Failed</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>Jobs</h2>
+    <div class="filter-bar">
+        <a href="{{ url_for('jobs') }}" class="filter-btn {% if not current_status %}active{% endif %}">All</a>
+        <a href="{{ url_for('jobs', status='pending') }}" class="filter-btn {% if current_status == 'pending' %}active{% endif %}">Pending</a>
+        <a href="{{ url_for('jobs', status='running') }}" class="filter-btn {% if current_status == 'running' %}active{% endif %}">Running</a>
+        <a href="{{ url_for('jobs', status='completed') }}" class="filter-btn {% if current_status == 'completed' %}active{% endif %}">Completed</a>
+        <a href="{{ url_for('jobs', status='failed') }}" class="filter-btn {% if current_status == 'failed' %}active{% endif %}">Failed</a>
+    </div>
+
+    {% if jobs %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Job ID</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Worker</th>
+                <th>Started</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td><code>{{ job.job_id[:8] }}...</code></td>
+                <td>{{ job.job_type }}</td>
+                <td><span class="status-badge {{ job.status }}">{{ job.status }}</span></td>
+                <td>{{ job.assigned_worker or '-' }}</td>
+                <td>{{ job.started_at or job.created_at }}</td>
+                <td>
+                    <a href="{{ url_for('job_detail', job_id=job.job_id) }}" class="btn btn-small">View</a>
+                    {% if job.status == 'running' %}
+                    <form action="{{ url_for('cancel_job', job_id=job.job_id) }}" method="POST" style="display:inline;">
+                        <button type="submit" class="btn btn-small btn-danger">Cancel</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No jobs found</p>
+    {% endif %}
+</section>
+{% endblock %}

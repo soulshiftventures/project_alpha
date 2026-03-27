@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Job {{ job.job_id[:8] }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('jobs') }}" class="back-link">&larr; Back to Jobs</a>
+    <h1>Job Details</h1>
+    <code class="job-id">{{ job.job_id }}</code>
+</div>
+
+<section class="panel">
+    <h2>Overview</h2>
+    <dl class="detail-list">
+        <dt>Job ID</dt>
+        <dd><code>{{ job.job_id }}</code></dd>
+        <dt>Type</dt>
+        <dd>{{ job.job_type }}</dd>
+        <dt>Status</dt>
+        <dd><span class="status-badge {{ job.status }}">{{ job.status }}</span></dd>
+        <dt>Worker</dt>
+        <dd>{{ job.assigned_worker or 'Not assigned' }}</dd>
+        <dt>Created</dt>
+        <dd>{{ job.created_at }}</dd>
+        {% if job.started_at %}
+        <dt>Started</dt>
+        <dd>{{ job.started_at }}</dd>
+        {% endif %}
+        {% if job.completed_at %}
+        <dt>Completed</dt>
+        <dd>{{ job.completed_at }}</dd>
+        {% endif %}
+    </dl>
+</section>
+
+{% if job.payload %}
+<section class="panel">
+    <h2>Payload</h2>
+    <pre class="code-block">{{ job.payload | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+{% if job.result %}
+<section class="panel">
+    <h2>Result</h2>
+    <pre class="code-block">{{ job.result | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+{% if job.error %}
+<section class="panel panel-error">
+    <h2>Error</h2>
+    <pre class="error-block">{{ job.error }}</pre>
+</section>
+{% endif %}
+
+{% if job.status == 'running' %}
+<section class="panel">
+    <h2>Actions</h2>
+    <form action="{{ url_for('cancel_job', job_id=job.job_id) }}" method="POST">
+        <button type="submit" class="btn btn-danger">Cancel Job</button>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

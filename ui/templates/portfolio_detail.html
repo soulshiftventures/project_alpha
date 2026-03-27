@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ business.name }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('portfolio') }}" class="back-link">&larr; Back to Portfolio</a>
+    <h1>{{ business.name }}</h1>
+    <span class="stage-badge {{ business.stage }}">{{ business.stage }}</span>
+</div>
+
+<section class="panel">
+    <h2>Details</h2>
+    <dl class="detail-list">
+        <dt>Business ID</dt>
+        <dd>{{ business.business_id }}</dd>
+        <dt>Description</dt>
+        <dd>{{ business.description or 'No description' }}</dd>
+        <dt>Stage</dt>
+        <dd>{{ business.stage }}</dd>
+        <dt>Created</dt>
+        <dd>{{ business.created_at }}</dd>
+    </dl>
+</section>
+
+{% if business.metadata %}
+<section class="panel">
+    <h2>Metadata</h2>
+    <pre class="code-block">{{ business.metadata | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+<section class="panel">
+    <h2>Actions</h2>
+    <div class="action-grid">
+        <a href="{{ url_for('goals') }}?business_id={{ business.business_id }}" class="btn btn-primary">Submit Goal for This Business</a>
+    </div>
+</section>
+{% endblock %}

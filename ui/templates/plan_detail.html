@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Plan {{ request_id[:8] }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('plans') }}" class="back-link">&larr; Back to Plans</a>
+    <h1>Execution Plan</h1>
+    <code class="request-id">{{ request_id }}</code>
+</div>
+
+<section class="panel">
+    <h2>Overview</h2>
+    <dl class="detail-list">
+        <dt>Objective</dt>
+        <dd>{{ plan.objective or 'N/A' }}</dd>
+        <dt>Status</dt>
+        <dd><span class="status-badge {{ plan.status }}">{{ plan.status }}</span></dd>
+        <dt>Created</dt>
+        <dd>{{ plan.created_at or 'N/A' }}</dd>
+        {% if plan.business_id %}
+        <dt>Business</dt>
+        <dd><a href="{{ url_for('portfolio_detail', business_id=plan.business_id) }}">{{ plan.business_id }}</a></dd>
+        {% endif %}
+    </dl>
+</section>
+
+{% if plan.steps %}
+<section class="panel">
+    <h2>Steps ({{ plan.steps|length }})</h2>
+    <ol class="step-list">
+        {% for step in plan.steps %}
+        <li class="step-item {{ step.status }}">
+            <div class="step-header">
+                <span class="step-action">{{ step.action }}</span>
+                <span class="status-badge {{ step.status }}">{{ step.status }}</span>
+            </div>
+            <p class="step-description">{{ step.description }}</p>
+            {% if step.agent %}
+            <span class="step-meta">Agent: {{ step.agent }}</span>
+            {% endif %}
+            {% if step.result %}
+            <div class="step-result">
+                <strong>Result:</strong> {{ step.result }}
+            </div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</section>
+{% endif %}
+
+{% if plan.metadata %}
+<section class="panel">
+    <h2>Metadata</h2>
+    <pre class="code-block">{{ plan.metadata | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

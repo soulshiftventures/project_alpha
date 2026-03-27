@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{ url_for('home') }}">{{ app_name }}</a>
+            <span class="version">v{{ version }}</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="active"{% endif %}>Overview</a></li>
+            <li><a href="{{ url_for('portfolio') }}" {% if 'portfolio' in request.endpoint %}class="active"{% endif %}>Portfolio</a></li>
+            <li><a href="{{ url_for('goals') }}" {% if 'goal' in request.endpoint %}class="active"{% endif %}>Goals</a></li>
+            <li><a href="{{ url_for('plans') }}" {% if 'plan' in request.endpoint %}class="active"{% endif %}>Plans</a></li>
+            <li><a href="{{ url_for('approvals') }}" {% if 'approv' in request.endpoint %}class="active"{% endif %}>Approvals</a></li>
+            <li><a href="{{ url_for('jobs') }}" {% if 'job' in request.endpoint %}class="active"{% endif %}>Jobs</a></li>
+            <li><a href="{{ url_for('events') }}" {% if 'event' in request.endpoint %}class="active"{% endif %}>Events</a></li>
+            <li><a href="{{ url_for('backends') }}" {% if 'backend' in request.endpoint %}class="active"{% endif %}>Backends</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>{{ app_name }} - Operator Interface</p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

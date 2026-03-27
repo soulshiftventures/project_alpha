@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Events - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Event Log</h1>
+    <p class="subtitle">System events and activity log</p>
+</div>
+
+<section class="panel">
+    <h2>Event Counts</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">{{ counts.total or 0 }}</span>
+            <span class="stat-label">Total</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ counts.info or 0 }}</span>
+            <span class="stat-label">Info</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ counts.warning or 0 }}</span>
+            <span class="stat-label">Warnings</span>
+        </div>
+        <div class="stat-card stat-error">
+            <span class="stat-value">{{ counts.error or 0 }}</span>
+            <span class="stat-label">Errors</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>Events</h2>
+    <div class="filter-bar">
+        <span class="filter-label">Severity:</span>
+        <a href="{{ url_for('events') }}" class="filter-btn {% if not current_severity %}active{% endif %}">All</a>
+        <a href="{{ url_for('events', severity='info') }}" class="filter-btn {% if current_severity == 'info' %}active{% endif %}">Info</a>
+        <a href="{{ url_for('events', severity='warning') }}" class="filter-btn {% if current_severity == 'warning' %}active{% endif %}">Warning</a>
+        <a href="{{ url_for('events', severity='error') }}" class="filter-btn {% if current_severity == 'error' %}active{% endif %}">Error</a>
+    </div>
+
+    {% if events %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr class="row-{{ event.severity }}">
+                <td>{{ event.timestamp }}</td>
+                <td>{{ event.event_type }}</td>
+                <td><span class="severity-badge {{ event.severity }}">{{ event.severity }}</span></td>
+                <td>{{ event.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No events found</p>
+    {% endif %}
+</section>
+{% endblock %}
