@@ -15,19 +15,31 @@
         {% for item in pending %}
         <div class="approval-card">
             <div class="approval-header">
-                <span class="approval-type">{{ item.request_type }}</span>
+                <span class="approval-type">{{ item.request_type or 'action' }}</span>
                 <span class="priority-badge {{ item.priority }}">{{ item.priority }}</span>
+                <span class="risk-badge {{ item.risk_level }}">{{ item.risk_level }}</span>
             </div>
             <div class="approval-body">
-                <p class="approval-description">{{ item.description }}</p>
+                <p class="approval-description">{{ item.description or item.action }}</p>
                 <dl class="approval-meta">
                     <dt>Requester</dt>
                     <dd>{{ item.requester }}</dd>
                     <dt>Submitted</dt>
                     <dd>{{ item.created_at }}</dd>
+                    <dt>Reason</dt>
+                    <dd>{{ item.reason or 'Requires approval' }}</dd>
+                    {% if item.connector_name %}
+                    <dt>Connector</dt>
+                    <dd><code>{{ item.connector_name }}</code></dd>
+                    {% endif %}
+                    {% if item.operation %}
+                    <dt>Operation</dt>
+                    <dd><code>{{ item.operation }}</code></dd>
+                    {% endif %}
                 </dl>
             </div>
             <div class="approval-actions">
+                <a href="{{ url_for('approval_detail', record_id=item.record_id) }}" class="btn btn-secondary">View Details</a>
                 <form action="{{ url_for('approve', record_id=item.record_id) }}" method="POST" style="display:inline;">
                     <button type="submit" class="btn btn-success">Approve</button>
                 </form>
@@ -55,16 +67,26 @@
                 <th>Status</th>
                 <th>Decided By</th>
                 <th>Date</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for item in history %}
             <tr>
-                <td>{{ item.request_type }}</td>
-                <td>{{ item.description[:50] }}{% if item.description|length > 50 %}...{% endif %}</td>
-                <td><span class="status-badge {{ item.status }}">{{ item.status }}</span></td>
-                <td>{{ item.decided_by or '-' }}</td>
-                <td>{{ item.decided_at or item.created_at }}</td>
+                <td>{{ item.request_type or 'action' }}</td>
+                <td>{{ item.description[:50] if item.description else (item.action[:50] if item.action else '-') }}{% if (item.description or item.action or '')|length > 50 %}...{% endif %}</td>
+                <td>
+                    {% if item.approved %}
+                    <span class="status-badge approved">Approved</span>
+                    {% elif item.approved is false %}
+                    <span class="status-badge denied">Denied</span>
+                    {% else %}
+                    <span class="status-badge {{ item.status }}">{{ item.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.approved_by or '-' }}</td>
+                <td>{{ item.resolved_at or item.created_at }}</td>
+                <td><a href="{{ url_for('approval_detail', record_id=item.record_id) }}">View</a></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -72,5 +94,20 @@
     {% else %}
     <p class="empty-state">No approval history</p>
     {% endif %}
+</section>
+
+<section class="panel">
+    <h2>Approval Guidelines</h2>
+    <p class="note">When reviewing approvals:</p>
+    <ul>
+        <li><strong>Low risk</strong> - Read-only operations, can typically be auto-approved</li>
+        <li><strong>Medium risk</strong> - Write operations or cost-incurring actions, review details before approving</li>
+        <li><strong>High risk</strong> - Bulk operations, external notifications, or significant cost, careful review required</li>
+        <li><strong>Critical risk</strong> - Irreversible operations, must be manually approved with rationale</li>
+    </ul>
+    <p class="note">
+        Approved items with connectors can optionally be promoted to live mode,
+        allowing real API calls. This requires valid credentials and policy compliance.
+    </p>
 </section>
 {% endblock %}

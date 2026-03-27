@@ -14,14 +14,30 @@
     <dl class="detail-list">
         <dt>Job ID</dt>
         <dd><code>{{ job.job_id }}</code></dd>
-        <dt>Type</dt>
-        <dd>{{ job.job_type }}</dd>
+        <dt>Plan ID</dt>
+        <dd>
+            {% if job.plan_id %}
+            <code>{{ job.plan_id }}</code>
+            {% else %}
+            <span class="muted">Not assigned</span>
+            {% endif %}
+        </dd>
         <dt>Status</dt>
         <dd><span class="status-badge {{ job.status }}">{{ job.status }}</span></dd>
+        <dt>Backend</dt>
+        <dd>{{ job.backend }}</dd>
         <dt>Worker</dt>
-        <dd>{{ job.assigned_worker or 'Not assigned' }}</dd>
-        <dt>Created</dt>
-        <dd>{{ job.created_at }}</dd>
+        <dd>{{ job.worker_id or 'Not assigned' }}</dd>
+        <dt>Retry Count</dt>
+        <dd>{{ job.retry_count or 0 }}</dd>
+    </dl>
+</section>
+
+<section class="panel">
+    <h2>Timing</h2>
+    <dl class="detail-list">
+        <dt>Dispatched</dt>
+        <dd>{{ job.dispatched_at or 'Not dispatched' }}</dd>
         {% if job.started_at %}
         <dt>Started</dt>
         <dd>{{ job.started_at }}</dd>
@@ -33,17 +49,41 @@
     </dl>
 </section>
 
-{% if job.payload %}
+{% if job.options %}
 <section class="panel">
-    <h2>Payload</h2>
-    <pre class="code-block">{{ job.payload | tojson(indent=2) }}</pre>
+    <h2>Execution Options</h2>
+    <dl class="detail-list">
+        <dt>Strategy</dt>
+        <dd>{{ job.options.strategy }}</dd>
+        <dt>Priority</dt>
+        <dd>{{ job.options.priority }}</dd>
+        <dt>Timeout</dt>
+        <dd>{{ job.options.timeout_seconds or 'No limit' }} seconds</dd>
+        <dt>Max Retries</dt>
+        <dd>{{ job.options.max_retries or 0 }}</dd>
+        <dt>Stop on Failure</dt>
+        <dd>{{ 'Yes' if job.options.stop_on_failure else 'No' }}</dd>
+        <dt>Parallel Steps</dt>
+        <dd>{{ 'Yes' if job.options.parallel_steps else 'No' }}</dd>
+    </dl>
 </section>
 {% endif %}
 
 {% if job.result %}
 <section class="panel">
     <h2>Result</h2>
-    <pre class="code-block">{{ job.result | tojson(indent=2) }}</pre>
+    <dl class="detail-list">
+        <dt>Status</dt>
+        <dd><span class="status-badge {{ job.result.status }}">{{ job.result.status }}</span></dd>
+        <dt>Steps Completed</dt>
+        <dd>{{ job.result.completed_steps }} / {{ job.result.total_steps }}</dd>
+        <dt>Failed Steps</dt>
+        <dd>{{ job.result.failed_steps }}</dd>
+        {% if job.result.duration %}
+        <dt>Duration</dt>
+        <dd>{{ "%.2f"|format(job.result.duration) }} seconds</dd>
+        {% endif %}
+    </dl>
 </section>
 {% endif %}
 
@@ -54,12 +94,52 @@
 </section>
 {% endif %}
 
-{% if job.status == 'running' %}
 <section class="panel">
     <h2>Actions</h2>
-    <form action="{{ url_for('cancel_job', job_id=job.job_id) }}" method="POST">
-        <button type="submit" class="btn btn-danger">Cancel Job</button>
-    </form>
+    <div class="action-buttons">
+        {% if job.can_cancel %}
+        <form action="{{ url_for('cancel_job', job_id=job.job_id) }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-danger">Cancel Job</button>
+        </form>
+        {% endif %}
+
+        {% if job.can_retry %}
+        <form action="{{ url_for('retry_job', job_id=job.job_id) }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-warning">Retry Job</button>
+        </form>
+        {% endif %}
+
+        {% if not job.can_cancel and not job.can_retry %}
+        <p class="muted">No actions available for this job status.</p>
+        {% endif %}
+    </div>
+
+    <div class="action-notes">
+        {% if job.is_complete %}
+        <p class="note">This job has completed.
+            {% if job.status == 'failed' %}
+            Use "Retry Job" to re-submit the execution plan.
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
 </section>
-{% endif %}
+
+<section class="panel">
+    <h2>Execution Mode</h2>
+    <dl class="detail-list">
+        <dt>Mode</dt>
+        <dd><span class="mode-badge dry-run">Dry Run</span></dd>
+        <dt>Live Execution</dt>
+        <dd>Requires approval and credential validation</dd>
+    </dl>
+    <p class="note">
+        Jobs run in dry-run mode by default. Live execution requires:
+    </p>
+    <ul>
+        <li>Approval from the operator</li>
+        <li>Valid credentials for the connector</li>
+        <li>Policy check to pass</li>
+    </ul>
+</section>
 {% endblock %}

@@ -253,17 +253,31 @@ class TestOperatorService:
 
     def test_approve_request(self, service, mock_approval_manager):
         """Test approving a request."""
+        # Set up mock to return an approval record
+        mock_record = Mock()
+        mock_record.request_id = "req-001"
+        mock_record.connector_name = None
+        mock_record.operation = None
+        mock_approval_manager.approve.return_value = mock_record
+
         result = service.approve_request("apr-001", approver="principal")
 
         mock_approval_manager.approve.assert_called_once()
-        assert result is True
+        # approve_request now returns a dict with success key
+        assert result["success"] is True
 
     def test_deny_request(self, service, mock_approval_manager):
         """Test denying a request."""
+        # Set up mock to return an approval record
+        mock_record = Mock()
+        mock_record.request_id = "req-001"
+        mock_approval_manager.deny.return_value = mock_record
+
         result = service.deny_request("apr-001", "Not approved", denier="principal")
 
         mock_approval_manager.deny.assert_called_once()
-        assert result is True
+        # deny_request now returns a dict with success key
+        assert result["success"] is True
 
     def test_get_jobs(self, service, mock_job_dispatcher):
         """Test getting jobs."""
@@ -290,10 +304,18 @@ class TestOperatorService:
 
     def test_cancel_job(self, service, mock_job_dispatcher):
         """Test canceling a job."""
+        # Set up mock job that can be cancelled
+        mock_job = Mock()
+        mock_job.plan_id = "plan-001"
+        mock_job.is_complete = False
+        mock_job_dispatcher.get_job.return_value = mock_job
+        mock_job_dispatcher.cancel_job.return_value = True
+
         result = service.cancel_job("job-001")
 
         mock_job_dispatcher.cancel_job.assert_called_once_with("job-001")
-        assert result is True
+        # cancel_job now returns a dict with success key
+        assert result["success"] is True
 
     def test_get_events(self, service, mock_event_logger):
         """Test getting events."""
@@ -363,10 +385,17 @@ class TestFlaskRoutes:
         mock.get_approval_history.return_value = []
         mock.get_jobs.return_value = []
         mock.get_job.return_value = None
+        mock.get_job_detail.return_value = None
         mock.get_job_stats.return_value = {"pending": 0, "running": 0}
         mock.get_event_counts.return_value = {"total": 0}
         mock.get_backends.return_value = []
         mock.get_runtime_stats.return_value = {}
+        mock.get_plan_detail.return_value = None
+        mock.get_approval_detail.return_value = None
+        mock.approve_request.return_value = {"success": True}
+        mock.deny_request.return_value = {"success": True}
+        mock.cancel_job.return_value = {"success": True}
+        mock.retry_job.return_value = {"success": True}
 
         return mock
 
@@ -432,6 +461,7 @@ class TestFlaskRoutes:
 
     def test_plan_detail_not_found(self, client, mock_service):
         """Test plan detail 404."""
+        mock_service.get_plan_detail.return_value = None
         with patch('ui.app.get_service', return_value=mock_service):
             response = client.get('/plans/nonexistent')
             assert response.status_code == 404
@@ -477,6 +507,7 @@ class TestFlaskRoutes:
 
     def test_job_detail_not_found(self, client, mock_service):
         """Test job detail 404."""
+        mock_service.get_job_detail.return_value = None
         with patch('ui.app.get_service', return_value=mock_service):
             response = client.get('/jobs/nonexistent')
             assert response.status_code == 404

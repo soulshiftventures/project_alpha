@@ -199,7 +199,7 @@ def plans():
 def plan_detail(request_id: str):
     """Execution plan detail view."""
     service = get_service()
-    plan_data = service.get_execution_plan(request_id)
+    plan_data = service.get_plan_detail(request_id)
 
     if not plan_data:
         return render_template("error.html", message="Plan not found"), 404
@@ -223,10 +223,73 @@ def api_plans():
 def api_plan_detail(request_id: str):
     """API: Get execution plan detail."""
     service = get_service()
-    plan = service.get_execution_plan(request_id)
+    plan = service.get_plan_detail(request_id)
     if not plan:
         return jsonify({"error": "Plan not found"}), 404
     return jsonify(plan)
+
+
+# =============================================================================
+# Live Mode Control
+# =============================================================================
+
+@app.route("/api/live-mode/summary")
+def api_live_mode_summary():
+    """API: Get live mode controller summary."""
+    service = get_service()
+    summary = service.get_live_mode_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/live-mode/check", methods=["POST"])
+def api_live_mode_check():
+    """API: Check if operation can be promoted to live mode."""
+    service = get_service()
+    data = request.get_json() or {}
+    connector = data.get("connector", "")
+    operation = data.get("operation", "")
+
+    if not connector or not operation:
+        return jsonify({"error": "connector and operation required"}), 400
+
+    result = service.check_live_mode_gate(connector, operation)
+    return jsonify(result)
+
+
+@app.route("/api/live-mode/promote", methods=["POST"])
+def api_live_mode_promote():
+    """API: Promote an operation to live mode."""
+    service = get_service()
+    data = request.get_json() or {}
+    connector = data.get("connector", "")
+    operation = data.get("operation", "")
+    approval_id = data.get("approval_id")
+
+    if not connector or not operation:
+        return jsonify({"error": "connector and operation required"}), 400
+
+    result = service.promote_to_live(
+        connector=connector,
+        operation=operation,
+        approval_id=approval_id,
+    )
+    return jsonify(result)
+
+
+@app.route("/api/live-mode/promotions")
+def api_live_mode_promotions():
+    """API: Get active live mode promotions."""
+    service = get_service()
+    promotions = service.get_active_promotions()
+    return jsonify(promotions)
+
+
+@app.route("/api/live-mode/standing-approvals")
+def api_standing_approvals():
+    """API: Get standing operation approvals."""
+    service = get_service()
+    approvals = service.get_standing_approvals()
+    return jsonify(approvals)
 
 
 # =============================================================================
@@ -247,14 +310,37 @@ def approvals():
     )
 
 
+@app.route("/approvals/<record_id>")
+def approval_detail(record_id: str):
+    """Approval detail view."""
+    service = get_service()
+    detail = service.get_approval_detail(record_id)
+
+    if not detail:
+        return render_template("error.html", message="Approval not found"), 404
+
+    return render_template(
+        "approval_detail.html",
+        approval=detail,
+    )
+
+
 @app.route("/approvals/<record_id>/approve", methods=["POST"])
 def approve(record_id: str):
     """Approve a pending request."""
     service = get_service()
-    success = service.approve_request(record_id, approver="principal")
+    rationale = request.form.get("rationale", "")
+    promote_to_live = request.form.get("promote_to_live") == "true"
+
+    result = service.approve_request(
+        record_id,
+        approver="principal",
+        rationale=rationale,
+        promote_to_live=promote_to_live,
+    )
 
     if request.headers.get("Accept") == "application/json":
-        return jsonify({"success": success})
+        return jsonify(result)
 
     return redirect(url_for("approvals"))
 
@@ -264,10 +350,11 @@ def deny(record_id: str):
     """Deny a pending request."""
     service = get_service()
     reason = request.form.get("reason", "Denied by operator")
-    success = service.deny_request(record_id, reason, denier="principal")
+
+    result = service.deny_request(record_id, reason, denier="principal")
 
     if request.headers.get("Accept") == "application/json":
-        return jsonify({"success": success})
+        return jsonify(result)
 
     return redirect(url_for("approvals"))
 
@@ -280,12 +367,31 @@ def api_approvals():
     return jsonify(pending)
 
 
+@app.route("/api/approvals/<record_id>")
+def api_approval_detail(record_id: str):
+    """API: Get approval detail."""
+    service = get_service()
+    detail = service.get_approval_detail(record_id)
+    if not detail:
+        return jsonify({"error": "Approval not found"}), 404
+    return jsonify(detail)
+
+
 @app.route("/api/approvals/<record_id>/approve", methods=["POST"])
 def api_approve(record_id: str):
     """API: Approve a request."""
     service = get_service()
-    success = service.approve_request(record_id, approver="principal")
-    return jsonify({"success": success})
+    data = request.get_json() or {}
+    rationale = data.get("rationale", "")
+    promote_to_live = data.get("promote_to_live", False)
+
+    result = service.approve_request(
+        record_id,
+        approver="principal",
+        rationale=rationale,
+        promote_to_live=promote_to_live,
+    )
+    return jsonify(result)
 
 
 @app.route("/api/approvals/<record_id>/deny", methods=["POST"])
@@ -294,8 +400,9 @@ def api_deny(record_id: str):
     service = get_service()
     data = request.get_json() or {}
     reason = data.get("reason", "Denied by operator")
-    success = service.deny_request(record_id, reason, denier="principal")
-    return jsonify({"success": success})
+
+    result = service.deny_request(record_id, reason, denier="principal")
+    return jsonify(result)
 
 
 # =============================================================================
@@ -322,7 +429,7 @@ def jobs():
 def job_detail(job_id: str):
     """Job detail view."""
     service = get_service()
-    job = service.get_job(job_id)
+    job = service.get_job_detail(job_id)
 
     if not job:
         return render_template("error.html", message="Job not found"), 404
@@ -337,12 +444,24 @@ def job_detail(job_id: str):
 def cancel_job(job_id: str):
     """Cancel a running job."""
     service = get_service()
-    success = service.cancel_job(job_id)
+    result = service.cancel_job(job_id)
 
     if request.headers.get("Accept") == "application/json":
-        return jsonify({"success": success})
+        return jsonify(result)
 
     return redirect(url_for("jobs"))
+
+
+@app.route("/jobs/<job_id>/retry", methods=["POST"])
+def retry_job(job_id: str):
+    """Retry a failed job."""
+    service = get_service()
+    result = service.retry_job(job_id)
+
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(result)
+
+    return redirect(url_for("job_detail", job_id=job_id))
 
 
 @app.route("/api/jobs")

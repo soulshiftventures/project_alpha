@@ -295,24 +295,181 @@ class OperatorService:
                 "action": r.action,
                 "requester": r.requester,
                 "classification": r.classification.value,
-                "reason": r.reason,
+                "reason": r.reason or r.rationale,
                 "created_at": r.created_at,
                 "context": r.context,
+                "request_type": r.request_type or "action",
+                "description": r.description or r.action,
+                "priority": r.priority,
+                "risk_level": r.risk_level,
+                "connector_name": r.connector_name,
+                "operation": r.operation,
+                "plan_id": r.plan_id,
+                "job_id": r.job_id,
             }
             for r in pending
         ]
 
-    def approve_request(self, record_id: str, approver: str = "principal") -> bool:
-        """Approve a pending request."""
+    def get_approval_detail(self, record_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed information about an approval item."""
         self._ensure_initialized()
 
-        return self._approval_manager.approve(record_id, approver)
+        # Check pending first
+        for r in self._approval_manager.get_pending():
+            if r.record_id == record_id:
+                return self._build_approval_detail(r)
 
-    def deny_request(self, record_id: str, reason: str, denier: str = "principal") -> bool:
-        """Deny a pending request."""
+        # Check history
+        for r in self._approval_manager.get_history(limit=1000):
+            if r.record_id == record_id:
+                return self._build_approval_detail(r)
+
+        return None
+
+    def _build_approval_detail(self, r) -> Dict[str, Any]:
+        """Build detailed approval record dictionary."""
+        detail = {
+            "record_id": r.record_id,
+            "request_id": r.request_id,
+            "policy_id": r.policy_id,
+            "action": r.action,
+            "requester": r.requester,
+            "target_agent": r.target_agent,
+            "classification": r.classification.value,
+            "status": r.status.value,
+            "reason": r.reason or r.rationale,
+            "rationale": r.rationale,
+            "created_at": r.created_at,
+            "decided_by": r.decided_by,
+            "decided_at": r.decided_at,
+            "resolved_at": r.resolved_at,
+            "request_type": r.request_type or "action",
+            "description": r.description or r.action,
+            "priority": r.priority,
+            "risk_level": r.risk_level,
+            "context": r.context,
+            "connector_name": r.connector_name,
+            "operation": r.operation,
+            "plan_id": r.plan_id,
+            "job_id": r.job_id,
+            "approved": r.approved,
+            "approved_by": r.approved_by,
+        }
+
+        # Add related plan/job info if available
+        if r.plan_id:
+            plan = self.get_execution_plan(r.request_id)
+            if plan:
+                detail["related_plan"] = {
+                    "plan_id": r.plan_id,
+                    "step_count": len(plan.get("plan", {}).get("steps", [])),
+                    "selected_skills": plan.get("selected_skills", []),
+                }
+
+        return detail
+
+    def approve_request(
+        self,
+        record_id: str,
+        approver: str = "principal",
+        rationale: str = "",
+        execute_after: bool = False,
+        promote_to_live: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Approve a pending request.
+
+        Args:
+            record_id: Approval record ID
+            approver: Who is approving
+            rationale: Reason for approval
+            execute_after: Whether to trigger execution
+            promote_to_live: Whether to promote to live mode
+
+        Returns:
+            Result dictionary with status and any execution result
+        """
         self._ensure_initialized()
 
-        return self._approval_manager.deny(record_id, denier, reason)
+        record = self._approval_manager.approve(record_id, approver, rationale)
+        if not record:
+            return {"success": False, "error": "Approval record not found"}
+
+        # Log the approval
+        self._event_logger.log_approval(
+            request_id=record.request_id,
+            approved=True,
+            approver=approver,
+            reason=rationale or "Approved by operator",
+        )
+
+        result = {
+            "success": True,
+            "record_id": record_id,
+            "approved": True,
+            "approver": approver,
+        }
+
+        # Handle live mode promotion if requested
+        if promote_to_live and record.connector_name and record.operation:
+            try:
+                from core.live_mode_controller import get_live_mode_controller
+                lmc = get_live_mode_controller()
+                promotion = lmc.promote_to_live(
+                    connector=record.connector_name,
+                    operation=record.operation,
+                    promoted_by=approver,
+                    approval_id=record_id,
+                )
+                if promotion:
+                    result["live_mode_promoted"] = True
+                    result["promotion_id"] = promotion.promotion_id
+                else:
+                    result["live_mode_promoted"] = False
+                    result["promotion_error"] = "Gate check failed"
+            except Exception as e:
+                result["promotion_error"] = str(e)
+
+        return result
+
+    def deny_request(
+        self,
+        record_id: str,
+        reason: str,
+        denier: str = "principal",
+    ) -> Dict[str, Any]:
+        """
+        Deny a pending request.
+
+        Args:
+            record_id: Approval record ID
+            reason: Reason for denial
+            denier: Who is denying
+
+        Returns:
+            Result dictionary
+        """
+        self._ensure_initialized()
+
+        record = self._approval_manager.deny(record_id, denier, reason)
+        if not record:
+            return {"success": False, "error": "Approval record not found"}
+
+        # Log the denial
+        self._event_logger.log_approval(
+            request_id=record.request_id,
+            approved=False,
+            approver=denier,
+            reason=reason,
+        )
+
+        return {
+            "success": True,
+            "record_id": record_id,
+            "denied": True,
+            "denier": denier,
+            "reason": reason,
+        }
 
     def get_approval_history(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get approval history."""
@@ -325,10 +482,13 @@ class OperatorService:
                 "request_id": r.request_id,
                 "action": r.action,
                 "classification": r.classification.value,
+                "status": r.status.value,
                 "approved": r.approved,
                 "approved_by": r.approved_by,
                 "created_at": r.created_at,
                 "resolved_at": r.resolved_at,
+                "request_type": r.request_type or "action",
+                "description": r.description or r.action[:50] if r.action else "",
             }
             for r in history
         ]
@@ -402,11 +562,108 @@ class OperatorService:
             }
         return None
 
-    def cancel_job(self, job_id: str) -> bool:
+    def cancel_job(self, job_id: str) -> Dict[str, Any]:
         """Cancel a running job."""
         self._ensure_initialized()
 
-        return self._job_dispatcher.cancel_job(job_id)
+        job = self._job_dispatcher.get_job(job_id)
+        if not job:
+            return {"success": False, "error": "Job not found"}
+
+        if job.is_complete:
+            return {"success": False, "error": "Job already complete"}
+
+        success = self._job_dispatcher.cancel_job(job_id)
+
+        if success:
+            self._event_logger.log_job_cancelled(
+                request_id=job.plan_id,
+                job_id=job_id,
+                reason="Cancelled by operator",
+            )
+
+        return {"success": success, "job_id": job_id}
+
+    def retry_job(self, job_id: str) -> Dict[str, Any]:
+        """
+        Retry a failed job.
+
+        Note: Full retry requires plan storage. This logs the request
+        and returns metadata for manual retry handling.
+        """
+        self._ensure_initialized()
+
+        job = self._job_dispatcher.get_job(job_id)
+        if not job:
+            return {"success": False, "error": "Job not found"}
+
+        if job.status != JobStatus.FAILED:
+            return {"success": False, "error": f"Job not failed (status: {job.status.value})"}
+
+        # Log retry request
+        self._event_logger.log_job_retry_requested(
+            request_id=job.plan_id,
+            job_id=job_id,
+            requested_by="principal",
+            reason="Retry requested by operator",
+        )
+
+        # Return metadata for retry - actual retry requires re-submitting the plan
+        return {
+            "success": True,
+            "job_id": job_id,
+            "plan_id": job.plan_id,
+            "retry_logged": True,
+            "note": "Plan must be resubmitted for execution",
+        }
+
+    def get_job_detail(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed job information including safe execution context."""
+        self._ensure_initialized()
+
+        job = self._job_dispatcher.get_job(job_id)
+        if not job:
+            return None
+
+        result_dict = None
+        if job.result:
+            result_dict = {
+                "status": job.result.status.value,
+                "total_steps": job.result.total_steps,
+                "completed_steps": job.result.completed_steps,
+                "failed_steps": job.result.failed_steps,
+                "duration": job.result.duration_seconds,
+            }
+
+        detail = {
+            "job_id": job.job_id,
+            "plan_id": job.plan_id,
+            "backend": job.backend_type.value,
+            "status": job.status.value,
+            "dispatched_at": job.dispatched_at.isoformat() if job.dispatched_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "worker_id": job.worker_instance_id,
+            "error": job.error,
+            "result": result_dict,
+            "retry_count": job.retry_count,
+            "can_retry": job.status == JobStatus.FAILED,
+            "can_cancel": job.status in (JobStatus.PENDING, JobStatus.RUNNING, JobStatus.QUEUED),
+            "is_complete": job.is_complete,
+        }
+
+        # Add options if available
+        if job.options:
+            detail["options"] = {
+                "strategy": job.options.strategy.value,
+                "priority": job.options.priority.name,
+                "timeout_seconds": job.options.timeout_seconds,
+                "max_retries": job.options.max_retries,
+                "stop_on_failure": job.options.stop_on_failure,
+                "parallel_steps": job.options.parallel_steps,
+            }
+
+        return detail
 
     def get_job_stats(self) -> Dict[str, Any]:
         """Get job statistics."""
@@ -576,6 +833,160 @@ class OperatorService:
             return manager.get_all_schedules()
         except Exception:
             return []
+
+    # -------------------------------------------------------------------------
+    # Live Mode Control
+    # -------------------------------------------------------------------------
+
+    def get_live_mode_summary(self) -> Dict[str, Any]:
+        """Get live mode controller summary."""
+        try:
+            from core.live_mode_controller import get_live_mode_controller
+            controller = get_live_mode_controller()
+            return controller.get_summary()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def check_live_mode_gate(
+        self,
+        connector: str,
+        operation: str,
+    ) -> Dict[str, Any]:
+        """Check if an operation can be promoted to live mode."""
+        try:
+            from core.live_mode_controller import get_live_mode_controller
+            controller = get_live_mode_controller()
+            result = controller.check_live_mode_gate(
+                connector=connector,
+                operation=operation,
+            )
+            return result.to_dict()
+        except Exception as e:
+            return {"allowed": False, "error": str(e)}
+
+    def promote_to_live(
+        self,
+        connector: str,
+        operation: str,
+        approval_id: Optional[str] = None,
+        promoted_by: str = "principal",
+    ) -> Dict[str, Any]:
+        """
+        Promote an operation to live mode.
+
+        Requires policy and credential checks to pass.
+        """
+        try:
+            from core.live_mode_controller import get_live_mode_controller
+            controller = get_live_mode_controller()
+
+            # Log the request
+            self._event_logger.log_live_mode_promotion_requested(
+                connector=connector,
+                operation=operation,
+                requested_by=promoted_by,
+            )
+
+            promotion = controller.promote_to_live(
+                connector=connector,
+                operation=operation,
+                promoted_by=promoted_by,
+                approval_id=approval_id,
+            )
+
+            if promotion:
+                return {
+                    "success": True,
+                    "promotion_id": promotion.promotion_id,
+                    "connector": connector,
+                    "operation": operation,
+                    "promoted_by": promoted_by,
+                }
+            else:
+                return {
+                    "success": False,
+                    "connector": connector,
+                    "operation": operation,
+                    "error": "Gate check failed",
+                }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_active_promotions(self) -> List[Dict[str, Any]]:
+        """Get list of active live mode promotions."""
+        try:
+            from core.live_mode_controller import get_live_mode_controller
+            controller = get_live_mode_controller()
+            promotions = controller.get_active_promotions()
+            return [p.to_dict() for p in promotions]
+        except Exception:
+            return []
+
+    def get_standing_approvals(self) -> Dict[str, str]:
+        """Get all standing operation approvals."""
+        try:
+            from core.live_mode_controller import get_live_mode_controller
+            controller = get_live_mode_controller()
+            return controller.get_standing_approvals()
+        except Exception:
+            return {}
+
+    # -------------------------------------------------------------------------
+    # Plan Detail (Enhanced)
+    # -------------------------------------------------------------------------
+
+    def get_plan_detail(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed execution plan with all context."""
+        self._ensure_initialized()
+
+        result = self._orchestrator.get_result(request_id)
+        if not result or not result.execution_plan:
+            return None
+
+        plan = result.execution_plan
+
+        return {
+            "request_id": request_id,
+            "plan_id": plan.plan_id,
+            "objective": plan.objective,
+            "domain": plan.primary_domain.value,
+            "status": plan.status.value,
+            "created_at": plan.created_at.isoformat() if plan.created_at else None,
+
+            # Step information
+            "step_count": len(plan.steps),
+            "steps": [
+                {
+                    "step_id": s.step_id,
+                    "name": s.name,
+                    "description": s.description,
+                    "domain": s.domain.value,
+                    "status": s.status.value,
+                }
+                for s in plan.steps
+            ],
+
+            # Skill/agent selection
+            "selected_skills": result.selected_skills,
+            "selected_commands": result.selected_commands,
+            "selected_agents": result.selected_agents,
+
+            # Execution context
+            "backend_used": result.backend_used,
+            "job_id": result.job_id,
+
+            # Approval status
+            "approval_required": result.skill_approval_required,
+            "policy_decisions": result.skill_policy_decisions,
+
+            # Mode information
+            "dry_run_mode": True,  # Default safe
+            "live_execution_available": False,
+
+            # Result
+            "success": result.success,
+            "error": result.error,
+        }
 
 
 # Singleton instance

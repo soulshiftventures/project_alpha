@@ -12,37 +12,109 @@
 <section class="panel">
     <h2>Overview</h2>
     <dl class="detail-list">
+        <dt>Plan ID</dt>
+        <dd><code>{{ plan.plan_id }}</code></dd>
         <dt>Objective</dt>
         <dd>{{ plan.objective or 'N/A' }}</dd>
+        <dt>Domain</dt>
+        <dd>{{ plan.domain }}</dd>
         <dt>Status</dt>
         <dd><span class="status-badge {{ plan.status }}">{{ plan.status }}</span></dd>
         <dt>Created</dt>
         <dd>{{ plan.created_at or 'N/A' }}</dd>
-        {% if plan.business_id %}
-        <dt>Business</dt>
-        <dd><a href="{{ url_for('portfolio_detail', business_id=plan.business_id) }}">{{ plan.business_id }}</a></dd>
-        {% endif %}
+        <dt>Success</dt>
+        <dd>
+            {% if plan.success %}
+            <span class="status-badge success">Yes</span>
+            {% elif plan.success is false %}
+            <span class="status-badge failed">No</span>
+            {% else %}
+            <span class="muted">Pending</span>
+            {% endif %}
+        </dd>
     </dl>
 </section>
 
+<section class="panel">
+    <h2>Approval & Execution Mode</h2>
+    <dl class="detail-list">
+        <dt>Approval Required</dt>
+        <dd>
+            {% if plan.approval_required %}
+            <span class="status-badge warning">Yes</span>
+            {% else %}
+            <span class="status-badge success">No</span>
+            {% endif %}
+        </dd>
+        <dt>Execution Mode</dt>
+        <dd>
+            {% if plan.dry_run_mode %}
+            <span class="mode-badge dry-run">Dry Run</span>
+            {% else %}
+            <span class="mode-badge live">Live</span>
+            {% endif %}
+        </dd>
+        <dt>Live Execution Available</dt>
+        <dd>
+            {% if plan.live_execution_available %}
+            <span class="status-badge success">Yes</span>
+            {% else %}
+            <span class="status-badge warning">Requires Approval</span>
+            {% endif %}
+        </dd>
+    </dl>
+
+    {% if plan.policy_decisions %}
+    <h3>Policy Decisions</h3>
+    <pre class="code-block">{{ plan.policy_decisions | tojson(indent=2) }}</pre>
+    {% endif %}
+</section>
+
+{% if plan.selected_skills or plan.selected_commands or plan.selected_agents %}
+<section class="panel">
+    <h2>Selected Resources</h2>
+    {% if plan.selected_skills %}
+    <h3>Skills</h3>
+    <ul class="tag-list">
+        {% for skill in plan.selected_skills %}
+        <li class="tag skill">{{ skill }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if plan.selected_commands %}
+    <h3>Commands</h3>
+    <ul class="tag-list">
+        {% for cmd in plan.selected_commands %}
+        <li class="tag command">{{ cmd }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if plan.selected_agents %}
+    <h3>Specialized Agents</h3>
+    <ul class="tag-list">
+        {% for agent in plan.selected_agents %}
+        <li class="tag agent">{{ agent }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
+{% endif %}
+
 {% if plan.steps %}
 <section class="panel">
-    <h2>Steps ({{ plan.steps|length }})</h2>
+    <h2>Steps ({{ plan.step_count }})</h2>
     <ol class="step-list">
         {% for step in plan.steps %}
         <li class="step-item {{ step.status }}">
             <div class="step-header">
-                <span class="step-action">{{ step.action }}</span>
+                <span class="step-name">{{ step.name }}</span>
+                <span class="step-domain">{{ step.domain }}</span>
                 <span class="status-badge {{ step.status }}">{{ step.status }}</span>
             </div>
+            {% if step.description %}
             <p class="step-description">{{ step.description }}</p>
-            {% if step.agent %}
-            <span class="step-meta">Agent: {{ step.agent }}</span>
-            {% endif %}
-            {% if step.result %}
-            <div class="step-result">
-                <strong>Result:</strong> {{ step.result }}
-            </div>
             {% endif %}
         </li>
         {% endfor %}
@@ -50,10 +122,43 @@
 </section>
 {% endif %}
 
-{% if plan.metadata %}
 <section class="panel">
-    <h2>Metadata</h2>
-    <pre class="code-block">{{ plan.metadata | tojson(indent=2) }}</pre>
+    <h2>Execution Details</h2>
+    <dl class="detail-list">
+        <dt>Backend Used</dt>
+        <dd>{{ plan.backend_used or 'Not yet dispatched' }}</dd>
+        <dt>Job ID</dt>
+        <dd>
+            {% if plan.job_id %}
+            <a href="{{ url_for('job_detail', job_id=plan.job_id) }}"><code>{{ plan.job_id }}</code></a>
+            {% else %}
+            <span class="muted">Not yet created</span>
+            {% endif %}
+        </dd>
+    </dl>
+</section>
+
+{% if plan.error %}
+<section class="panel panel-error">
+    <h2>Error</h2>
+    <pre class="error-block">{{ plan.error }}</pre>
 </section>
 {% endif %}
+
+<section class="panel">
+    <h2>Live Execution Requirements</h2>
+    <p class="note">
+        To enable live execution for this plan:
+    </p>
+    <ul>
+        <li>An approval record must be created and approved</li>
+        <li>Required credentials must be configured and validated</li>
+        <li>Policy checks must pass for all operations</li>
+        <li>The "promote to live" option must be selected during approval</li>
+    </ul>
+    <p class="note">
+        Live execution will make real API calls to external services.
+        Costs may be incurred and actions may be irreversible.
+    </p>
+</section>
 {% endblock %}

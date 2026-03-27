@@ -92,9 +92,30 @@ class ApprovalRecord:
     requester: str = ""
     target_agent: str = ""
 
+    # Enhanced context for UI display
+    request_type: str = ""  # Type of request (skill, connector, job, etc.)
+    description: str = ""   # Human-readable description
+    priority: str = "medium"  # Request priority
+    reason: str = ""  # Why approval is needed
+    context: Dict[str, Any] = field(default_factory=dict)  # Additional safe context
+
+    # Related entity IDs
+    plan_id: Optional[str] = None
+    job_id: Optional[str] = None
+    connector_name: Optional[str] = None
+    operation: Optional[str] = None
+
+    # Risk classification
+    risk_level: str = "medium"
+
     # Timing
     created_at: str = field(default_factory=lambda: _utc_now().isoformat())
     expires_at: Optional[str] = None
+    resolved_at: Optional[str] = None
+
+    # For compatibility with UI
+    approved: Optional[bool] = None
+    approved_by: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -383,6 +404,9 @@ class ApprovalManager:
         record.status = ApprovalStatus.APPROVED
         record.decided_by = approver
         record.decided_at = _utc_now().isoformat()
+        record.resolved_at = record.decided_at
+        record.approved = True
+        record.approved_by = approver
         if rationale:
             record.rationale = rationale
 
@@ -416,6 +440,9 @@ class ApprovalManager:
         record.status = ApprovalStatus.DENIED
         record.decided_by = denier
         record.decided_at = _utc_now().isoformat()
+        record.resolved_at = record.decided_at
+        record.approved = False
+        record.approved_by = denier
         if rationale:
             record.rationale = rationale
 

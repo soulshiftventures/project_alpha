@@ -73,12 +73,24 @@ class EventType(Enum):
     JOB_COMPLETED = "job_completed"
     JOB_FAILED = "job_failed"
     JOB_CANCELLED = "job_cancelled"
+    JOB_RETRY_REQUESTED = "job_retry_requested"
+    JOB_RERUN_REQUESTED = "job_rerun_requested"
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
     STEP_FAILED = "step_failed"
     WORKER_SPAWNED = "worker_spawned"
     WORKER_ASSIGNED = "worker_assigned"
     WORKER_RELEASED = "worker_released"
+
+    # Live mode control events
+    LIVE_MODE_PROMOTION_REQUESTED = "live_mode_promotion_requested"
+    LIVE_MODE_PROMOTION_GRANTED = "live_mode_promotion_granted"
+    LIVE_MODE_PROMOTION_DENIED = "live_mode_promotion_denied"
+    LIVE_MODE_PROMOTION_CONSUMED = "live_mode_promotion_consumed"
+
+    # Execution control events
+    EXECUTION_BLOCKED_POLICY = "execution_blocked_policy"
+    EXECUTION_BLOCKED_CREDENTIALS = "execution_blocked_credentials"
 
     # System events
     SYSTEM_STARTUP = "system_startup"
@@ -908,5 +920,156 @@ class EventLogger:
                 "worker_id": worker_id,
                 "job_id": job_id,
                 "completed_successfully": success
+            }
+        )
+
+    # Job retry/rerun logging methods
+
+    def log_job_retry_requested(
+        self,
+        request_id: str,
+        job_id: str,
+        requested_by: str,
+        reason: str = ""
+    ) -> Event:
+        """Log job retry request."""
+        return self.log(
+            event_type=EventType.JOB_RETRY_REQUESTED,
+            message=f"Job retry requested: {job_id}",
+            request_id=request_id,
+            agent_id=requested_by,
+            details={
+                "job_id": job_id,
+                "requested_by": requested_by,
+                "reason": reason
+            }
+        )
+
+    def log_job_rerun_requested(
+        self,
+        request_id: str,
+        plan_id: str,
+        requested_by: str,
+        reason: str = ""
+    ) -> Event:
+        """Log job rerun request."""
+        return self.log(
+            event_type=EventType.JOB_RERUN_REQUESTED,
+            message=f"Plan rerun requested: {plan_id}",
+            request_id=request_id,
+            agent_id=requested_by,
+            details={
+                "plan_id": plan_id,
+                "requested_by": requested_by,
+                "reason": reason
+            }
+        )
+
+    # Live mode logging methods
+
+    def log_live_mode_promotion_requested(
+        self,
+        connector: str,
+        operation: str,
+        requested_by: str,
+        risk_level: str = "medium"
+    ) -> Event:
+        """Log live mode promotion request."""
+        return self.log(
+            event_type=EventType.LIVE_MODE_PROMOTION_REQUESTED,
+            message=f"Live mode promotion requested: {connector}:{operation}",
+            agent_id=requested_by,
+            details={
+                "connector": connector,
+                "operation": operation,
+                "requested_by": requested_by,
+                "risk_level": risk_level
+            }
+        )
+
+    def log_live_mode_promotion_granted(
+        self,
+        connector: str,
+        operation: str,
+        promotion_id: str,
+        granted_by: str,
+        approval_id: Optional[str] = None
+    ) -> Event:
+        """Log live mode promotion granted."""
+        return self.log(
+            event_type=EventType.LIVE_MODE_PROMOTION_GRANTED,
+            message=f"Live mode promotion granted: {connector}:{operation}",
+            agent_id=granted_by,
+            details={
+                "connector": connector,
+                "operation": operation,
+                "promotion_id": promotion_id,
+                "granted_by": granted_by,
+                "approval_id": approval_id
+            }
+        )
+
+    def log_live_mode_promotion_denied(
+        self,
+        connector: str,
+        operation: str,
+        reason: str,
+        denied_by: str = "system"
+    ) -> Event:
+        """Log live mode promotion denied."""
+        return self.log(
+            event_type=EventType.LIVE_MODE_PROMOTION_DENIED,
+            message=f"Live mode promotion denied: {connector}:{operation}",
+            severity=EventSeverity.WARNING,
+            agent_id=denied_by,
+            details={
+                "connector": connector,
+                "operation": operation,
+                "reason": reason,
+                "denied_by": denied_by
+            }
+        )
+
+    def log_live_mode_promotion_consumed(
+        self,
+        connector: str,
+        operation: str,
+        promotion_id: str
+    ) -> Event:
+        """Log live mode promotion consumed."""
+        return self.log(
+            event_type=EventType.LIVE_MODE_PROMOTION_CONSUMED,
+            message=f"Live mode promotion consumed: {connector}:{operation}",
+            details={
+                "connector": connector,
+                "operation": operation,
+                "promotion_id": promotion_id
+            }
+        )
+
+    def log_execution_blocked(
+        self,
+        request_id: str,
+        reason: str,
+        block_type: str,  # "policy" or "credentials"
+        connector: Optional[str] = None,
+        operation: Optional[str] = None
+    ) -> Event:
+        """Log execution blocked by policy or credentials."""
+        event_type = (
+            EventType.EXECUTION_BLOCKED_POLICY
+            if block_type == "policy"
+            else EventType.EXECUTION_BLOCKED_CREDENTIALS
+        )
+        return self.log(
+            event_type=event_type,
+            message=f"Execution blocked ({block_type}): {reason}",
+            severity=EventSeverity.WARNING,
+            request_id=request_id,
+            details={
+                "reason": reason,
+                "block_type": block_type,
+                "connector": connector,
+                "operation": operation
             }
         )

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Approval {{ approval.record_id[:8] }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('approvals') }}" class="back-link">&larr; Back to Approvals</a>
+    <h1>Approval Details</h1>
+    <code class="record-id">{{ approval.record_id }}</code>
+</div>
+
+<section class="panel">
+    <h2>Overview</h2>
+    <dl class="detail-list">
+        <dt>Record ID</dt>
+        <dd><code>{{ approval.record_id }}</code></dd>
+        <dt>Type</dt>
+        <dd>{{ approval.request_type or 'action' }}</dd>
+        <dt>Status</dt>
+        <dd><span class="status-badge {{ approval.status }}">{{ approval.status }}</span></dd>
+        <dt>Risk Level</dt>
+        <dd><span class="risk-badge {{ approval.risk_level }}">{{ approval.risk_level }}</span></dd>
+        <dt>Priority</dt>
+        <dd><span class="priority-badge {{ approval.priority }}">{{ approval.priority }}</span></dd>
+        <dt>Created</dt>
+        <dd>{{ approval.created_at }}</dd>
+        {% if approval.resolved_at %}
+        <dt>Resolved</dt>
+        <dd>{{ approval.resolved_at }}</dd>
+        {% endif %}
+    </dl>
+</section>
+
+<section class="panel">
+    <h2>Request Details</h2>
+    <dl class="detail-list">
+        <dt>Action</dt>
+        <dd>{{ approval.action or approval.description }}</dd>
+        <dt>Description</dt>
+        <dd>{{ approval.description or approval.action }}</dd>
+        <dt>Requester</dt>
+        <dd>{{ approval.requester }}</dd>
+        <dt>Reason for Approval</dt>
+        <dd>{{ approval.reason or approval.rationale or 'Requires operator approval' }}</dd>
+        {% if approval.target_agent %}
+        <dt>Target Agent</dt>
+        <dd>{{ approval.target_agent }}</dd>
+        {% endif %}
+    </dl>
+</section>
+
+{% if approval.connector_name or approval.operation %}
+<section class="panel">
+    <h2>Integration Context</h2>
+    <dl class="detail-list">
+        {% if approval.connector_name %}
+        <dt>Connector</dt>
+        <dd><code>{{ approval.connector_name }}</code></dd>
+        {% endif %}
+        {% if approval.operation %}
+        <dt>Operation</dt>
+        <dd><code>{{ approval.operation }}</code></dd>
+        {% endif %}
+        {% if approval.plan_id %}
+        <dt>Execution Plan</dt>
+        <dd><a href="{{ url_for('plan_detail', request_id=approval.request_id) }}">{{ approval.plan_id }}</a></dd>
+        {% endif %}
+        {% if approval.job_id %}
+        <dt>Job</dt>
+        <dd><a href="{{ url_for('job_detail', job_id=approval.job_id) }}">{{ approval.job_id }}</a></dd>
+        {% endif %}
+    </dl>
+</section>
+{% endif %}
+
+{% if approval.related_plan %}
+<section class="panel">
+    <h2>Related Plan</h2>
+    <dl class="detail-list">
+        <dt>Plan ID</dt>
+        <dd><code>{{ approval.related_plan.plan_id }}</code></dd>
+        <dt>Step Count</dt>
+        <dd>{{ approval.related_plan.step_count }}</dd>
+        {% if approval.related_plan.selected_skills %}
+        <dt>Selected Skills</dt>
+        <dd>
+            <ul class="tag-list">
+            {% for skill in approval.related_plan.selected_skills %}
+                <li class="tag">{{ skill }}</li>
+            {% endfor %}
+            </ul>
+        </dd>
+        {% endif %}
+    </dl>
+</section>
+{% endif %}
+
+{% if approval.context %}
+<section class="panel">
+    <h2>Additional Context</h2>
+    <pre class="code-block">{{ approval.context | tojson(indent=2) }}</pre>
+</section>
+{% endif %}
+
+{% if approval.decided_by %}
+<section class="panel">
+    <h2>Decision</h2>
+    <dl class="detail-list">
+        <dt>Decided By</dt>
+        <dd>{{ approval.decided_by }}</dd>
+        <dt>Decided At</dt>
+        <dd>{{ approval.decided_at }}</dd>
+        <dt>Outcome</dt>
+        <dd>
+            {% if approval.approved %}
+            <span class="status-badge approved">Approved</span>
+            {% else %}
+            <span class="status-badge denied">Denied</span>
+            {% endif %}
+        </dd>
+        {% if approval.rationale %}
+        <dt>Rationale</dt>
+        <dd>{{ approval.rationale }}</dd>
+        {% endif %}
+    </dl>
+</section>
+{% endif %}
+
+{% if approval.status == 'pending' %}
+<section class="panel">
+    <h2>Actions</h2>
+    <div class="action-forms">
+        <form action="{{ url_for('approve', record_id=approval.record_id) }}" method="POST" class="inline-form">
+            <div class="form-group">
+                <label for="rationale">Approval Rationale (optional)</label>
+                <input type="text" id="rationale" name="rationale" placeholder="Reason for approval...">
+            </div>
+            {% if approval.connector_name and approval.operation %}
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="promote_to_live" value="true">
+                    Promote to live mode (allows real API execution)
+                </label>
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn-success">Approve</button>
+        </form>
+
+        <form action="{{ url_for('deny', record_id=approval.record_id) }}" method="POST" class="inline-form">
+            <div class="form-group">
+                <label for="reason">Denial Reason</label>
+                <input type="text" id="reason" name="reason" placeholder="Reason for denial..." required>
+            </div>
+            <button type="submit" class="btn btn-danger">Deny</button>
+        </form>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
