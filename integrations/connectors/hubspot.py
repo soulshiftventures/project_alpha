@@ -4,6 +4,15 @@ HubSpot Connector for Project Alpha.
 Provides CRM capabilities for contacts, deals, and pipelines.
 
 API Documentation: https://developers.hubspot.com/docs/api/overview
+
+LIVE EXECUTION STATUS:
+- create_contact: Fully implemented with httpx
+- update_contact: Fully implemented with httpx
+- get_contact: Dry-run only
+- list_contacts: Dry-run only
+- create_deal: Dry-run only
+- update_deal: Dry-run only
+- list_deals: Dry-run only
 """
 
 from typing import Any, Dict, List, Optional
@@ -17,6 +26,18 @@ from integrations.base import (
     RateLimitError,
     AuthenticationError,
 )
+from integrations.action_contracts import (
+    ActionContract,
+    ActionType,
+    ActionApprovalLevel,
+    register_action_contract,
+)
+
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
@@ -27,14 +48,23 @@ class HubSpotConnector(BaseConnector):
     Connector for HubSpot CRM platform.
 
     Supported operations:
-    - list_contacts: List contacts with optional filters
-    - get_contact: Get a specific contact
-    - create_contact: Create a new contact
-    - update_contact: Update an existing contact
-    - list_deals: List deals with optional filters
-    - create_deal: Create a new deal
-    - update_deal: Update an existing deal
+    - list_contacts: List contacts with optional filters (dry-run only)
+    - get_contact: Get a specific contact (dry-run only)
+    - create_contact: Create a new contact (LIVE CAPABLE)
+    - update_contact: Update an existing contact (LIVE CAPABLE)
+    - list_deals: List deals with optional filters (dry-run only)
+    - create_deal: Create a new deal (dry-run only)
+    - update_deal: Update an existing deal (dry-run only)
+
+    LIVE EXECUTION STATUS:
+    - create_contact: Fully implemented with httpx
+    - update_contact: Fully implemented with httpx
+    - Others: Dry-run only (read operations kept as dry-run for safety)
     """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._register_action_contracts()
 
     @property
     def name(self) -> str:
@@ -78,6 +108,76 @@ class HubSpotConnector(BaseConnector):
             "create_deal",
             "update_deal",
         ]
+
+    def _register_action_contracts(self) -> None:
+        """Register action contracts for this connector."""
+        # create_contact - LIVE CAPABLE
+        register_action_contract(ActionContract(
+            action_name="create_contact",
+            connector="hubspot",
+            action_type=ActionType.DATA_CREATE,
+            description="Create a new contact in HubSpot CRM",
+            required_params=["email"],
+            optional_params=["firstname", "lastname", "phone", "company", "properties"],
+            required_credentials=["hubspot_api_key"],
+            approval_level=ActionApprovalLevel.STANDARD,
+            estimated_cost_class="MINIMAL",
+            is_external=True,
+            supports_live=HTTPX_AVAILABLE,
+            live_implementation_status="fully_live" if HTTPX_AVAILABLE else "dry_run_only",
+            success_indicators=["id", "properties"],
+        ))
+
+        # update_contact - LIVE CAPABLE
+        register_action_contract(ActionContract(
+            action_name="update_contact",
+            connector="hubspot",
+            action_type=ActionType.DATA_UPDATE,
+            description="Update an existing contact in HubSpot CRM",
+            required_params=["contact_id", "properties"],
+            optional_params=[],
+            required_credentials=["hubspot_api_key"],
+            approval_level=ActionApprovalLevel.STANDARD,
+            estimated_cost_class="MINIMAL",
+            is_external=True,
+            supports_live=HTTPX_AVAILABLE,
+            live_implementation_status="fully_live" if HTTPX_AVAILABLE else "dry_run_only",
+            success_indicators=["id", "properties"],
+        ))
+
+        # get_contact - DRY_RUN ONLY
+        register_action_contract(ActionContract(
+            action_name="get_contact",
+            connector="hubspot",
+            action_type=ActionType.DATA_FETCH,
+            description="Get a contact by ID from HubSpot CRM",
+            required_params=["contact_id"],
+            optional_params=["properties"],
+            required_credentials=["hubspot_api_key"],
+            approval_level=ActionApprovalLevel.NONE,
+            estimated_cost_class="FREE",
+            is_external=False,
+            supports_live=False,
+            live_implementation_status="dry_run_only",
+            success_indicators=["id"],
+        ))
+
+        # list_contacts - DRY_RUN ONLY
+        register_action_contract(ActionContract(
+            action_name="list_contacts",
+            connector="hubspot",
+            action_type=ActionType.DATA_FETCH,
+            description="List contacts from HubSpot CRM",
+            required_params=[],
+            optional_params=["limit", "after", "properties", "sorts"],
+            required_credentials=["hubspot_api_key"],
+            approval_level=ActionApprovalLevel.NONE,
+            estimated_cost_class="FREE",
+            is_external=False,
+            supports_live=False,
+            live_implementation_status="dry_run_only",
+            success_indicators=["results"],
+        ))
 
     def _health_check_impl(self) -> ConnectorResult:
         """Check HubSpot API connectivity."""
@@ -182,7 +282,7 @@ class HubSpotConnector(BaseConnector):
         params: Dict[str, Any],
     ) -> ConnectorResult:
         """
-        Create a new contact.
+        Create a new contact - LIVE EXECUTION.
 
         Params:
             email: Contact email (required)
@@ -192,6 +292,12 @@ class HubSpotConnector(BaseConnector):
             company: Company name (optional)
             properties: Additional properties (optional)
         """
+        if not HTTPX_AVAILABLE:
+            return ConnectorResult.error_result(
+                "httpx not installed - cannot execute live",
+                error_type="dependency_missing",
+            )
+
         email = params.get("email")
         if not email:
             return ConnectorResult.error_result(
@@ -199,14 +305,81 @@ class HubSpotConnector(BaseConnector):
                 error_type="validation_error",
             )
 
-        return ConnectorResult.success_result(
-            data={
-                "id": None,
-                "properties": {"email": email},
-                "message": "Live API call would execute here",
-            },
-            metadata={"email": email},
-        )
+        # Build properties
+        properties = {"email": email}
+
+        if params.get("firstname"):
+            properties["firstname"] = params["firstname"]
+        if params.get("lastname"):
+            properties["lastname"] = params["lastname"]
+        if params.get("phone"):
+            properties["phone"] = params["phone"]
+        if params.get("company"):
+            properties["company"] = params["company"]
+
+        # Merge additional properties if provided
+        if params.get("properties"):
+            properties.update(params["properties"])
+
+        payload = {"properties": properties}
+
+        # Execute live API call
+        try:
+            response = httpx.post(
+                f"{self.base_url}/crm/v3/objects/contacts",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            result_data = response.json()
+
+            return ConnectorResult.success_result(
+                data={
+                    "id": result_data.get("id"),
+                    "properties": result_data.get("properties", {}),
+                    "createdAt": result_data.get("createdAt"),
+                    "updatedAt": result_data.get("updatedAt"),
+                },
+                metadata={
+                    "http_status": response.status_code,
+                    "live_execution": True,
+                    "contact_id": result_data.get("id"),
+                    "email": email,
+                },
+            )
+
+        except httpx.HTTPStatusError as e:
+            error_body = ""
+            try:
+                error_json = e.response.json()
+                error_body = error_json.get("message", e.response.text[:200])
+            except Exception:
+                error_body = e.response.text[:200] if e.response.text else "Unknown error"
+            return ConnectorResult.error_result(
+                f"HTTP {e.response.status_code}: {error_body}",
+                error_type="http_error",
+                metadata={"status_code": e.response.status_code},
+            )
+        except httpx.TimeoutException:
+            return ConnectorResult.error_result(
+                "Request timed out",
+                error_type="timeout",
+            )
+        except httpx.RequestError as e:
+            return ConnectorResult.error_result(
+                f"Request failed: {str(e)}",
+                error_type="connection_error",
+            )
+        except Exception as e:
+            logger.error(f"HubSpot create_contact failed: {e}")
+            return ConnectorResult.error_result(
+                str(e),
+                error_type=type(e).__name__,
+            )
 
     def _execute_update_contact(
         self,
@@ -214,12 +387,18 @@ class HubSpotConnector(BaseConnector):
         params: Dict[str, Any],
     ) -> ConnectorResult:
         """
-        Update an existing contact.
+        Update an existing contact - LIVE EXECUTION.
 
         Params:
             contact_id: Contact ID (required)
             properties: Properties to update (required)
         """
+        if not HTTPX_AVAILABLE:
+            return ConnectorResult.error_result(
+                "httpx not installed - cannot execute live",
+                error_type="dependency_missing",
+            )
+
         contact_id = params.get("contact_id")
         properties = params.get("properties")
 
@@ -234,14 +413,64 @@ class HubSpotConnector(BaseConnector):
                 error_type="validation_error",
             )
 
-        return ConnectorResult.success_result(
-            data={
-                "id": contact_id,
-                "properties": properties,
-                "message": "Live API call would execute here",
-            },
-            metadata={"contact_id": contact_id},
-        )
+        payload = {"properties": properties}
+
+        # Execute live API call
+        try:
+            response = httpx.patch(
+                f"{self.base_url}/crm/v3/objects/contacts/{contact_id}",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            result_data = response.json()
+
+            return ConnectorResult.success_result(
+                data={
+                    "id": result_data.get("id"),
+                    "properties": result_data.get("properties", {}),
+                    "updatedAt": result_data.get("updatedAt"),
+                },
+                metadata={
+                    "http_status": response.status_code,
+                    "live_execution": True,
+                    "contact_id": contact_id,
+                    "updated_properties": list(properties.keys()),
+                },
+            )
+
+        except httpx.HTTPStatusError as e:
+            error_body = ""
+            try:
+                error_json = e.response.json()
+                error_body = error_json.get("message", e.response.text[:200])
+            except Exception:
+                error_body = e.response.text[:200] if e.response.text else "Unknown error"
+            return ConnectorResult.error_result(
+                f"HTTP {e.response.status_code}: {error_body}",
+                error_type="http_error",
+                metadata={"status_code": e.response.status_code},
+            )
+        except httpx.TimeoutException:
+            return ConnectorResult.error_result(
+                "Request timed out",
+                error_type="timeout",
+            )
+        except httpx.RequestError as e:
+            return ConnectorResult.error_result(
+                f"Request failed: {str(e)}",
+                error_type="connection_error",
+            )
+        except Exception as e:
+            logger.error(f"HubSpot update_contact failed: {e}")
+            return ConnectorResult.error_result(
+                str(e),
+                error_type=type(e).__name__,
+            )
 
     def _execute_list_deals(
         self,

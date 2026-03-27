@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Scenario Run - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Scenario Run: {{ run.scenario_name }}</h1>
+    <p class="subtitle">Run ID: <code>{{ run.run_id }}</code></p>
+</div>
+
+<!-- Run Summary -->
+<section class="content-section">
+    <h2>Run Summary</h2>
+    <div class="detail-grid">
+        <div class="detail-item">
+            <label>Status</label>
+            <span class="status status-{{ run.status }}">{{ run.status }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Mode</label>
+            {% if run.dry_run %}
+            <span class="badge badge-info">Dry-run</span>
+            {% else %}
+            <span class="badge badge-warning">Live</span>
+            {% endif %}
+        </div>
+        <div class="detail-item">
+            <label>Triggered By</label>
+            <span>{{ run.triggered_by }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Started</label>
+            <span>{{ run.started_at[:19] if run.started_at else 'N/A' }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Completed</label>
+            <span>{{ run.completed_at[:19] if run.completed_at else 'N/A' }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Duration</label>
+            <span>{{ "%.2f"|format(run.duration_seconds) if run.duration_seconds else 'N/A' }}s</span>
+        </div>
+    </div>
+</section>
+
+<!-- Step Progress -->
+<section class="content-section">
+    <h2>Step Progress</h2>
+    <div class="progress-bar">
+        <div class="progress-fill" style="width: {{ (run.completed_steps / run.total_steps * 100) if run.total_steps else 0 }}%"></div>
+    </div>
+    <div class="progress-stats">
+        <span class="stat-completed">Completed: {{ run.completed_steps }}</span>
+        <span class="stat-failed">Failed: {{ run.failed_steps }}</span>
+        <span class="stat-skipped">Skipped: {{ run.skipped_steps }}</span>
+        <span class="stat-total">Total: {{ run.total_steps }}</span>
+    </div>
+</section>
+
+<!-- Inputs -->
+<section class="content-section">
+    <h2>Inputs</h2>
+    <div class="code-block">
+        <pre>{{ run.inputs|tojson(indent=2) }}</pre>
+    </div>
+</section>
+
+<!-- Step Results -->
+<section class="content-section">
+    <h2>Step Results</h2>
+    <div class="step-results">
+        {% for step in run.step_results %}
+        <div class="step-result step-{{ step.status }}">
+            <div class="step-header">
+                <span class="step-id">{{ step.step_id }}</span>
+                <span class="status status-{{ step.status }}">{{ step.status }}</span>
+                {% if step.duration_seconds %}
+                <span class="duration">{{ "%.2f"|format(step.duration_seconds) }}s</span>
+                {% endif %}
+            </div>
+
+            {% if step.error_message %}
+            <div class="step-error">
+                <strong>Error:</strong> {{ step.error_message }}
+            </div>
+            {% endif %}
+
+            {% if step.output_data %}
+            <div class="step-output">
+                <details>
+                    <summary>Output Data</summary>
+                    <pre>{{ step.output_data|tojson(indent=2) }}</pre>
+                </details>
+            </div>
+            {% endif %}
+
+            <div class="step-links">
+                {% if step.plan_id %}
+                <a href="{{ url_for('plan_detail', request_id=step.plan_id) }}" class="link">Plan: {{ step.plan_id[:12] }}...</a>
+                {% endif %}
+                {% if step.approval_id %}
+                <a href="{{ url_for('approval_detail', record_id=step.approval_id) }}" class="link">Approval: {{ step.approval_id[:12] }}...</a>
+                {% endif %}
+                {% if step.connector_execution_id %}
+                <a href="{{ url_for('connector_action_detail', execution_id=step.connector_execution_id) }}" class="link">Connector: {{ step.connector_execution_id[:12] }}...</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Related Entities -->
+<section class="content-section">
+    <h2>Related Entities</h2>
+    <div class="related-entities">
+        {% if run.plan_ids %}
+        <div class="entity-group">
+            <label>Plans</label>
+            <ul>
+                {% for plan_id in run.plan_ids %}
+                <li><code>{{ plan_id }}</code></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if run.job_ids %}
+        <div class="entity-group">
+            <label>Jobs</label>
+            <ul>
+                {% for job_id in run.job_ids %}
+                <li><a href="{{ url_for('job_detail', job_id=job_id) }}">{{ job_id }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if run.approval_ids %}
+        <div class="entity-group">
+            <label>Approvals</label>
+            <ul>
+                {% for approval_id in run.approval_ids %}
+                <li><a href="{{ url_for('approval_detail', record_id=approval_id) }}">{{ approval_id }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if run.connector_execution_ids %}
+        <div class="entity-group">
+            <label>Connector Actions</label>
+            <ul>
+                {% for exec_id in run.connector_execution_ids %}
+                <li><a href="{{ url_for('connector_action_detail', execution_id=exec_id) }}">{{ exec_id }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if run.opportunity_id %}
+        <div class="entity-group">
+            <label>Opportunity</label>
+            <p><a href="{{ url_for('opportunity_detail', opportunity_id=run.opportunity_id) }}">{{ run.opportunity_id }}</a></p>
+        </div>
+        {% endif %}
+
+        {% if run.handoff_id %}
+        <div class="entity-group">
+            <label>Handoff</label>
+            <p><code>{{ run.handoff_id }}</code></p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Final Output -->
+{% if run.final_output %}
+<section class="content-section">
+    <h2>Final Output</h2>
+    <div class="code-block">
+        <pre>{{ run.final_output|tojson(indent=2) }}</pre>
+    </div>
+</section>
+{% endif %}
+
+<!-- Error -->
+{% if run.error_message %}
+<section class="content-section error-section">
+    <h2>Error</h2>
+    <div class="error-message">
+        {{ run.error_message }}
+    </div>
+</section>
+{% endif %}
+
+<!-- Actions -->
+<section class="content-section">
+    <div class="page-actions">
+        <a href="{{ url_for('scenario_detail', scenario_id=run.scenario_id) }}" class="btn btn-primary">Run Again</a>
+        <a href="{{ url_for('scenarios') }}" class="btn btn-secondary">Back to Scenarios</a>
+    </div>
+</section>
+
+{% endblock %}

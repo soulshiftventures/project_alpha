@@ -1690,6 +1690,136 @@ class OperatorService:
                 "error": str(e)
             }
 
+    # =========================================================================
+    # SCENARIO OPERATIONS
+    # =========================================================================
+
+    def list_scenarios(
+        self,
+        category: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        List available scenarios.
+
+        Args:
+            category: Optional category filter
+
+        Returns:
+            List of scenario definition dicts
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+        return runner.list_scenarios(category=category)
+
+    def get_scenario(self, scenario_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get scenario definition by ID.
+
+        Args:
+            scenario_id: Scenario ID
+
+        Returns:
+            Scenario definition dict or None
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+        return runner.get_scenario(scenario_id)
+
+    def get_scenario_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of available scenarios.
+
+        Returns:
+            Summary dict with counts and categories
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+        return runner.get_scenario_summary()
+
+    def run_scenario(
+        self,
+        scenario_id: str,
+        inputs: Dict[str, Any],
+        dry_run: bool = True,
+        triggered_by: str = "operator",
+        auto_approve: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Execute a scenario.
+
+        Args:
+            scenario_id: Scenario ID to run
+            inputs: Input values for scenario
+            dry_run: If True, use dry-run mode for connectors
+            triggered_by: Who triggered the run
+            auto_approve: If True, auto-approve required approvals
+
+        Returns:
+            Scenario run dict with results
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+
+        run = runner.run_scenario(
+            scenario_id=scenario_id,
+            inputs=inputs,
+            dry_run=dry_run,
+            triggered_by=triggered_by,
+            auto_approve=auto_approve,
+        )
+
+        return run.to_dict()
+
+    def get_scenario_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get scenario run by ID.
+
+        Args:
+            run_id: Scenario run ID
+
+        Returns:
+            Scenario run dict or None
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+        return runner.get_run(run_id)
+
+    def list_scenario_runs(
+        self,
+        scenario_id: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        List scenario runs with optional filtering.
+
+        Args:
+            scenario_id: Filter by scenario ID
+            status: Filter by status
+            limit: Maximum runs to return
+
+        Returns:
+            List of scenario run dicts
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+        return runner.list_runs(
+            scenario_id=scenario_id,
+            status=status,
+            limit=limit,
+        )
+
+    def get_scenario_run_stats(self) -> Dict[str, Any]:
+        """
+        Get scenario run statistics.
+
+        Returns:
+            Stats dict with totals and breakdowns
+        """
+        from core.scenario_runner import get_scenario_runner
+        runner = get_scenario_runner()
+        return runner.get_run_stats()
+
 
 # Singleton instance
 _operator_service: Optional[OperatorService] = None

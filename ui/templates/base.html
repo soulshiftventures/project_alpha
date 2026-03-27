@@ -15,6 +15,7 @@
         </div>
         <ul class="nav-links">
             <li><a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="active"{% endif %}>Overview</a></li>
+            <li><a href="{{ url_for('scenarios') }}" {% if 'scenario' in request.endpoint %}class="active"{% endif %}>Scenarios</a></li>
             <li><a href="{{ url_for('discovery') }}" {% if 'discovery' in request.endpoint or 'opportunity' in request.endpoint %}class="active"{% endif %}>Discovery</a></li>
             <li><a href="{{ url_for('portfolio') }}" {% if 'portfolio' in request.endpoint %}class="active"{% endif %}>Portfolio</a></li>
             <li><a href="{{ url_for('goals') }}" {% if 'goal' in request.endpoint %}class="active"{% endif %}>Goals</a></li>

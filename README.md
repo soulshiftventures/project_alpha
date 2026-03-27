@@ -802,3 +802,40 @@ All connector-backed actions are now durably persisted with full audit trails an
 
 **Access:** Visit `/connector-actions` in the operator UI to view action history and details.
 
+### Expanded Live Connector Coverage (Sprint 18)
+
+The system now supports additional live-capable connector actions under the existing approval, credential, cost, policy, persistence, and audit systems:
+
+**Newly Live-Capable Actions:**
+
+| Connector | Action | Status | Notes |
+|-----------|--------|--------|-------|
+| **Tavily** | `search` | ✅ Live | AI-powered web search |
+| **Tavily** | `extract` | ✅ Live | URL content extraction |
+| **SendGrid** | `send_email` | ✅ Live | Transactional email send |
+| **HubSpot** | `create_contact` | ✅ Live | CRM contact creation |
+| **HubSpot** | `update_contact` | ✅ Live | CRM contact update |
+| **Firecrawl** | `scrape` | ✅ Live | Single URL scraping |
+
+**Still Dry-Run Only:**
+
+| Connector | Action | Reason |
+|-----------|--------|--------|
+| SendGrid | `send_template` | Template ID validation needed |
+| HubSpot | `list_contacts`, `get_contact` | Read ops kept as dry-run for safety |
+| HubSpot | `create_deal`, `update_deal`, `list_deals` | Deal write ops pending |
+| Firecrawl | `crawl`, `map` | Async job polling needed |
+| Telegram | `send_document` | File handling needed |
+
+**Governance:**
+- All live actions remain gated by credentials, policies, and approval workflows
+- Cost metadata attached to all executions
+- Full audit trail with lifecycle persistence
+- Safe output handling (credentials redacted)
+
+**Approval Requirements:**
+- Tavily search/extract: No approval required (research operations)
+- SendGrid send_email: Requires standard approval (external notification)
+- HubSpot create/update: Requires standard approval (CRM writes)
+- Firecrawl scrape: No approval required (research operation)
+

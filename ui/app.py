@@ -1109,6 +1109,183 @@ def api_capacity_decisions():
 
 
 # =============================================================================
+# Scenario Execution Routes
+# =============================================================================
+
+@app.route("/scenarios")
+def scenarios():
+    """Scenario list page - view available scenarios and run history."""
+    service = get_service()
+    scenario_list = service.list_scenarios()
+    recent_runs = service.list_scenario_runs(limit=20)
+    run_stats = service.get_scenario_run_stats()
+
+    return render_template(
+        "scenarios.html",
+        scenarios=scenario_list,
+        recent_runs=recent_runs,
+        stats=run_stats,
+    )
+
+
+@app.route("/scenarios/<scenario_id>")
+def scenario_detail(scenario_id: str):
+    """Scenario detail page - view scenario definition and launch."""
+    service = get_service()
+    scenario = service.get_scenario(scenario_id)
+
+    if not scenario:
+        return render_template("error.html", message="Scenario not found"), 404
+
+    # Get runs for this specific scenario
+    runs = service.list_scenario_runs(scenario_id=scenario_id, limit=20)
+
+    return render_template(
+        "scenario_detail.html",
+        scenario=scenario,
+        runs=runs,
+    )
+
+
+@app.route("/scenarios/<scenario_id>/run", methods=["POST"])
+def run_scenario(scenario_id: str):
+    """Launch a scenario execution."""
+    service = get_service()
+
+    # Get scenario to validate inputs
+    scenario = service.get_scenario(scenario_id)
+    if not scenario:
+        return render_template("error.html", message="Scenario not found"), 404
+
+    # Collect inputs from form
+    inputs = {}
+    for key in scenario.get("required_inputs", []):
+        value = request.form.get(key, "").strip()
+        if value:
+            inputs[key] = value
+    for key in scenario.get("optional_inputs", []):
+        value = request.form.get(key, "").strip()
+        if value:
+            inputs[key] = value
+
+    # Get execution options
+    dry_run = request.form.get("dry_run", "true") == "true"
+    auto_approve = request.form.get("auto_approve", "false") == "true"
+
+    # Execute scenario
+    result = service.run_scenario(
+        scenario_id=scenario_id,
+        inputs=inputs,
+        dry_run=dry_run,
+        triggered_by="operator",
+        auto_approve=auto_approve,
+    )
+
+    # Redirect to run detail
+    return redirect(url_for("scenario_run_detail", run_id=result.get("run_id")))
+
+
+@app.route("/scenarios/runs/<run_id>")
+def scenario_run_detail(run_id: str):
+    """Scenario run detail page - view execution results."""
+    service = get_service()
+    run = service.get_scenario_run(run_id)
+
+    if not run:
+        return render_template("error.html", message="Scenario run not found"), 404
+
+    return render_template(
+        "scenario_run_detail.html",
+        run=run,
+    )
+
+
+# =============================================================================
+# Scenario API Routes
+# =============================================================================
+
+@app.route("/api/scenarios")
+def api_scenarios():
+    """API: List available scenarios."""
+    service = get_service()
+    category = request.args.get("category")
+    scenarios = service.list_scenarios(category=category)
+    return jsonify({"scenarios": scenarios, "count": len(scenarios)})
+
+
+@app.route("/api/scenarios/summary")
+def api_scenario_summary():
+    """API: Get scenario summary."""
+    service = get_service()
+    summary = service.get_scenario_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/scenarios/<scenario_id>")
+def api_scenario_detail(scenario_id: str):
+    """API: Get scenario definition."""
+    service = get_service()
+    scenario = service.get_scenario(scenario_id)
+    if not scenario:
+        return jsonify({"error": "Scenario not found"}), 404
+    return jsonify(scenario)
+
+
+@app.route("/api/scenarios/<scenario_id>/run", methods=["POST"])
+def api_run_scenario(scenario_id: str):
+    """API: Execute a scenario."""
+    service = get_service()
+    data = request.get_json() or {}
+
+    inputs = data.get("inputs", {})
+    dry_run = data.get("dry_run", True)
+    auto_approve = data.get("auto_approve", False)
+
+    result = service.run_scenario(
+        scenario_id=scenario_id,
+        inputs=inputs,
+        dry_run=dry_run,
+        triggered_by="api",
+        auto_approve=auto_approve,
+    )
+    return jsonify(result)
+
+
+@app.route("/api/scenarios/runs")
+def api_scenario_runs():
+    """API: List scenario runs."""
+    service = get_service()
+    scenario_id = request.args.get("scenario_id")
+    status = request.args.get("status")
+    limit = int(request.args.get("limit", 50))
+
+    runs = service.list_scenario_runs(
+        scenario_id=scenario_id,
+        status=status,
+        limit=limit,
+    )
+    return jsonify({"runs": runs, "count": len(runs)})
+
+
+@app.route("/api/scenarios/runs/<run_id>")
+def api_scenario_run_detail(run_id: str):
+    """API: Get scenario run detail."""
+    service = get_service()
+    run = service.get_scenario_run(run_id)
+    if not run:
+        return jsonify({"error": "Scenario run not found"}), 404
+    return jsonify(run)
+
+
+@app.route("/api/scenarios/runs/stats")
+def api_scenario_run_stats():
+    """API: Get scenario run statistics."""
+    service = get_service()
+    stats = service.get_scenario_run_stats()
+    return jsonify(stats)
+
+
+# =============================================================================
 # Error Handlers
 # =============================================================================
 
@@ -1145,7 +1322,8 @@ if __name__ == "__main__":
 
   Routes:
     /             - System Overview
-    /discovery    - Business Discovery (NEW!)
+    /scenarios    - End-to-End Scenarios (NEW!)
+    /discovery    - Business Discovery
     /portfolio    - Portfolio View
     /goals        - Goal Submission
     /plans        - Execution Plans

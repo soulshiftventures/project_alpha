@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Scenarios - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>End-to-End Scenarios</h1>
+    <p class="subtitle">Execute and monitor operator-driven execution scenarios</p>
+</div>
+
+<!-- Stats Summary -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-value">{{ scenarios|length }}</div>
+        <div class="stat-label">Available Scenarios</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_runs|default(0) }}</div>
+        <div class="stat-label">Total Runs</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.by_status.completed|default(0) }}</div>
+        <div class="stat-label">Completed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.by_status.failed|default(0) }}</div>
+        <div class="stat-label">Failed</div>
+    </div>
+</div>
+
+<!-- Available Scenarios -->
+<section class="content-section">
+    <h2>Available Scenarios</h2>
+    <p class="section-desc">Select a scenario to view details and launch execution</p>
+
+    <div class="card-grid">
+        {% for scenario in scenarios %}
+        <div class="card scenario-card">
+            <div class="card-header">
+                <h3>{{ scenario.name }}</h3>
+                <span class="badge badge-{{ scenario.category }}">{{ scenario.category }}</span>
+            </div>
+            <div class="card-body">
+                <p>{{ scenario.description }}</p>
+                <div class="scenario-meta">
+                    <span><strong>Steps:</strong> {{ scenario.step_count }}</span>
+                    <span><strong>Connectors:</strong> {{ scenario.connectors_used|join(', ') or 'None' }}</span>
+                </div>
+                <div class="scenario-flags">
+                    {% if scenario.dry_run_capable %}
+                    <span class="flag flag-safe">Dry-run capable</span>
+                    {% endif %}
+                    {% if scenario.requires_approval_by_default %}
+                    <span class="flag flag-warning">Requires approval</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('scenario_detail', scenario_id=scenario.scenario_id) }}" class="btn btn-primary">View & Launch</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Recent Runs -->
+<section class="content-section">
+    <h2>Recent Runs</h2>
+    {% if recent_runs %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Run ID</th>
+                <th>Scenario</th>
+                <th>Status</th>
+                <th>Mode</th>
+                <th>Steps</th>
+                <th>Started</th>
+                <th>Duration</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in recent_runs %}
+            <tr>
+                <td><code>{{ run.run_id[:16] }}...</code></td>
+                <td>{{ run.scenario_name }}</td>
+                <td>
+                    <span class="status status-{{ run.status }}">{{ run.status }}</span>
+                </td>
+                <td>
+                    {% if run.dry_run %}
+                    <span class="badge badge-info">Dry-run</span>
+                    {% else %}
+                    <span class="badge badge-warning">Live</span>
+                    {% endif %}
+                </td>
+                <td>{{ run.completed_steps }}/{{ run.total_steps }}</td>
+                <td>{{ run.started_at[:19] if run.started_at else 'N/A' }}</td>
+                <td>{{ "%.2f"|format(run.duration_seconds) if run.duration_seconds else 'N/A' }}s</td>
+                <td>
+                    <a href="{{ url_for('scenario_run_detail', run_id=run.run_id) }}" class="btn btn-sm">Details</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No scenario runs yet. Launch a scenario to get started.</p>
+    {% endif %}
+</section>
+
+{% endblock %}

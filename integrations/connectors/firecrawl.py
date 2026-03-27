@@ -4,6 +4,11 @@ Firecrawl Connector for Project Alpha.
 Provides web scraping and content extraction capabilities.
 
 API Documentation: https://docs.firecrawl.dev/
+
+LIVE EXECUTION STATUS:
+- scrape: Fully implemented with httpx
+- crawl: Dry-run only (async job handling needed)
+- map: Dry-run only
 """
 
 from typing import Any, Dict, List, Optional
@@ -17,6 +22,18 @@ from integrations.base import (
     RateLimitError,
     AuthenticationError,
 )
+from integrations.action_contracts import (
+    ActionContract,
+    ActionType,
+    ActionApprovalLevel,
+    register_action_contract,
+)
+
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
@@ -27,10 +44,19 @@ class FirecrawlConnector(BaseConnector):
     Connector for Firecrawl web scraping API.
 
     Supported operations:
-    - scrape: Scrape a single URL
-    - crawl: Crawl multiple pages from a starting URL
-    - map: Get sitemap/structure of a website
+    - scrape: Scrape a single URL (LIVE CAPABLE)
+    - crawl: Crawl multiple pages from a starting URL (dry-run only)
+    - map: Get sitemap/structure of a website (dry-run only)
+
+    LIVE EXECUTION STATUS:
+    - scrape: Fully implemented with httpx
+    - crawl: Dry-run only (requires async job polling)
+    - map: Dry-run only
     """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._register_action_contracts()
 
     @property
     def name(self) -> str:
@@ -62,6 +88,59 @@ class FirecrawlConnector(BaseConnector):
 
     def get_operations(self) -> List[str]:
         return ["scrape", "crawl", "map"]
+
+    def _register_action_contracts(self) -> None:
+        """Register action contracts for this connector."""
+        # scrape - LIVE CAPABLE
+        register_action_contract(ActionContract(
+            action_name="scrape",
+            connector="firecrawl",
+            action_type=ActionType.RESEARCH,
+            description="Scrape a single URL and extract content",
+            required_params=["url"],
+            optional_params=["formats", "onlyMainContent", "includeTags", "excludeTags"],
+            required_credentials=["firecrawl_api_key"],
+            approval_level=ActionApprovalLevel.NONE,
+            estimated_cost_class="LOW",
+            is_external=True,
+            supports_live=HTTPX_AVAILABLE,
+            live_implementation_status="fully_live" if HTTPX_AVAILABLE else "dry_run_only",
+            success_indicators=["success", "data"],
+        ))
+
+        # crawl - DRY_RUN ONLY
+        register_action_contract(ActionContract(
+            action_name="crawl",
+            connector="firecrawl",
+            action_type=ActionType.RESEARCH,
+            description="Crawl multiple pages from a starting URL",
+            required_params=["url"],
+            optional_params=["limit", "maxDepth", "includePaths", "excludePaths"],
+            required_credentials=["firecrawl_api_key"],
+            approval_level=ActionApprovalLevel.STANDARD,
+            estimated_cost_class="MEDIUM",
+            is_external=True,
+            supports_live=False,
+            live_implementation_status="dry_run_only",
+            success_indicators=["success", "data"],
+        ))
+
+        # map - DRY_RUN ONLY
+        register_action_contract(ActionContract(
+            action_name="map",
+            connector="firecrawl",
+            action_type=ActionType.RESEARCH,
+            description="Get sitemap/structure of a website",
+            required_params=["url"],
+            optional_params=["search", "limit"],
+            required_credentials=["firecrawl_api_key"],
+            approval_level=ActionApprovalLevel.NONE,
+            estimated_cost_class="LOW",
+            is_external=True,
+            supports_live=False,
+            live_implementation_status="dry_run_only",
+            success_indicators=["success", "links"],
+        ))
 
     def _health_check_impl(self) -> ConnectorResult:
         """Check Firecrawl API connectivity."""
@@ -107,7 +186,7 @@ class FirecrawlConnector(BaseConnector):
         params: Dict[str, Any],
     ) -> ConnectorResult:
         """
-        Scrape a single URL.
+        Scrape a single URL - LIVE EXECUTION.
 
         Params:
             url: URL to scrape (required)
@@ -116,6 +195,12 @@ class FirecrawlConnector(BaseConnector):
             includeTags: HTML tags to include (optional)
             excludeTags: HTML tags to exclude (optional)
         """
+        if not HTTPX_AVAILABLE:
+            return ConnectorResult.error_result(
+                "httpx not installed - cannot execute live",
+                error_type="dependency_missing",
+            )
+
         url = params.get("url")
         if not url:
             return ConnectorResult.error_result(
@@ -123,25 +208,91 @@ class FirecrawlConnector(BaseConnector):
                 error_type="validation_error",
             )
 
-        # In real implementation:
-        # response = httpx.post(
-        #     f"{self.base_url}/scrape",
-        #     headers={"Authorization": f"Bearer {api_key}"},
-        #     json={
-        #         "url": url,
-        #         "formats": params.get("formats", ["markdown"]),
-        #         "onlyMainContent": params.get("onlyMainContent", True),
-        #     }
-        # )
+        # Build request payload
+        payload = {
+            "url": url,
+            "formats": params.get("formats", ["markdown"]),
+        }
 
-        return ConnectorResult.success_result(
-            data={
-                "url": url,
-                "content": "",
-                "message": "Live API call would execute here",
-            },
-            metadata={"formats": params.get("formats", ["markdown"])},
-        )
+        if params.get("onlyMainContent") is not None:
+            payload["onlyMainContent"] = params["onlyMainContent"]
+        if params.get("includeTags"):
+            payload["includeTags"] = params["includeTags"]
+        if params.get("excludeTags"):
+            payload["excludeTags"] = params["excludeTags"]
+
+        # Execute live API call
+        try:
+            response = httpx.post(
+                f"{self.base_url}/scrape",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=60.0,  # Scraping can take time
+            )
+            response.raise_for_status()
+            result_data = response.json()
+
+            if not result_data.get("success"):
+                return ConnectorResult.error_result(
+                    result_data.get("error", "Firecrawl API returned success=false"),
+                    error_type="api_error",
+                    metadata={"response": result_data},
+                )
+
+            # Extract data safely with size limits
+            data = result_data.get("data", {})
+            content_preview = ""
+            if data.get("markdown"):
+                content_preview = data["markdown"][:500] + "..." if len(data.get("markdown", "")) > 500 else data.get("markdown", "")
+
+            return ConnectorResult.success_result(
+                data={
+                    "success": True,
+                    "url": url,
+                    "markdown": data.get("markdown"),
+                    "html": data.get("html"),
+                    "metadata": data.get("metadata", {}),
+                    "content_preview": content_preview,
+                },
+                metadata={
+                    "http_status": response.status_code,
+                    "live_execution": True,
+                    "formats": params.get("formats", ["markdown"]),
+                    "content_length": len(data.get("markdown", "")),
+                },
+            )
+
+        except httpx.HTTPStatusError as e:
+            error_body = ""
+            try:
+                error_json = e.response.json()
+                error_body = error_json.get("error", e.response.text[:200])
+            except Exception:
+                error_body = e.response.text[:200] if e.response.text else "Unknown error"
+            return ConnectorResult.error_result(
+                f"HTTP {e.response.status_code}: {error_body}",
+                error_type="http_error",
+                metadata={"status_code": e.response.status_code},
+            )
+        except httpx.TimeoutException:
+            return ConnectorResult.error_result(
+                "Request timed out",
+                error_type="timeout",
+            )
+        except httpx.RequestError as e:
+            return ConnectorResult.error_result(
+                f"Request failed: {str(e)}",
+                error_type="connection_error",
+            )
+        except Exception as e:
+            logger.error(f"Firecrawl scrape failed: {e}")
+            return ConnectorResult.error_result(
+                str(e),
+                error_type=type(e).__name__,
+            )
 
     def _execute_crawl(
         self,

@@ -313,6 +313,33 @@ CREATE TABLE IF NOT EXISTS capacity_decisions (
     context_json TEXT
 );
 
+-- Scenario Runs (End-to-End Execution Scenarios)
+CREATE TABLE IF NOT EXISTS scenario_runs (
+    run_id TEXT PRIMARY KEY,
+    scenario_id TEXT NOT NULL,
+    scenario_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    inputs_json TEXT NOT NULL,
+    dry_run INTEGER NOT NULL DEFAULT 1,
+    started_at TEXT,
+    completed_at TEXT,
+    duration_seconds REAL,
+    step_results_json TEXT,
+    total_steps INTEGER DEFAULT 0,
+    completed_steps INTEGER DEFAULT 0,
+    failed_steps INTEGER DEFAULT 0,
+    skipped_steps INTEGER DEFAULT 0,
+    final_output_json TEXT,
+    error_message TEXT,
+    triggered_by TEXT,
+    plan_ids_json TEXT,
+    job_ids_json TEXT,
+    approval_ids_json TEXT,
+    connector_execution_ids_json TEXT,
+    opportunity_id TEXT,
+    handoff_id TEXT
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 CREATE INDEX IF NOT EXISTS idx_approvals_created ON approvals(created_at);
@@ -332,6 +359,9 @@ CREATE INDEX IF NOT EXISTS idx_handoffs_plan ON handoffs(plan_id);
 CREATE INDEX IF NOT EXISTS idx_capacity_decisions_timestamp ON capacity_decisions(timestamp);
 CREATE INDEX IF NOT EXISTS idx_capacity_decisions_dimension ON capacity_decisions(dimension);
 CREATE INDEX IF NOT EXISTS idx_capacity_decisions_decision ON capacity_decisions(decision);
+CREATE INDEX IF NOT EXISTS idx_scenario_runs_scenario ON scenario_runs(scenario_id);
+CREATE INDEX IF NOT EXISTS idx_scenario_runs_status ON scenario_runs(status);
+CREATE INDEX IF NOT EXISTS idx_scenario_runs_started ON scenario_runs(started_at);
 """
 
 
@@ -1350,7 +1380,9 @@ class StateStore:
             "policy_decisions_json", "metadata_json", "params_json",
             "hypothesis_json", "score_json", "recommendation_json",
             "operator_constraints_json", "status_history_json", "tags_json",
-            "metadata_json"
+            "metadata_json", "inputs_json", "step_results_json", "final_output_json",
+            "plan_ids_json", "job_ids_json", "approval_ids_json",
+            "connector_execution_ids_json"
         ]
 
         for field in json_fields:
@@ -1507,6 +1539,129 @@ class StateStore:
             return [self._row_to_dict(row) for row in cursor.fetchall()]
 
     # =========================================================================
+    # SCENARIO RUN OPERATIONS
+    # =========================================================================
+
+    def save_scenario_run(self, run: Dict[str, Any]) -> bool:
+        """Save or update a scenario run record."""
+        if not self._initialized:
+            return False
+
+        with self._lock:
+            try:
+                self._conn.execute("""
+                    INSERT OR REPLACE INTO scenario_runs (
+                        run_id, scenario_id, scenario_name, status, inputs_json,
+                        dry_run, started_at, completed_at, duration_seconds,
+                        step_results_json, total_steps, completed_steps, failed_steps,
+                        skipped_steps, final_output_json, error_message, triggered_by,
+                        plan_ids_json, job_ids_json, approval_ids_json,
+                        connector_execution_ids_json, opportunity_id, handoff_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    run.get("run_id"),
+                    run.get("scenario_id"),
+                    run.get("scenario_name"),
+                    run.get("status"),
+                    json.dumps(run.get("inputs", {})),
+                    1 if run.get("dry_run", True) else 0,
+                    run.get("started_at"),
+                    run.get("completed_at"),
+                    run.get("duration_seconds"),
+                    json.dumps(run.get("step_results", [])),
+                    run.get("total_steps", 0),
+                    run.get("completed_steps", 0),
+                    run.get("failed_steps", 0),
+                    run.get("skipped_steps", 0),
+                    json.dumps(run.get("final_output", {})),
+                    run.get("error_message"),
+                    run.get("triggered_by"),
+                    json.dumps(run.get("plan_ids", [])),
+                    json.dumps(run.get("job_ids", [])),
+                    json.dumps(run.get("approval_ids", [])),
+                    json.dumps(run.get("connector_execution_ids", [])),
+                    run.get("opportunity_id"),
+                    run.get("handoff_id"),
+                ))
+                return True
+            except Exception as e:
+                logger.error(f"Failed to save scenario run: {e}")
+                return False
+
+    def get_scenario_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Get a scenario run by ID."""
+        if not self._initialized:
+            return None
+
+        with self._lock:
+            cursor = self._conn.execute(
+                "SELECT * FROM scenario_runs WHERE run_id = ?",
+                (run_id,)
+            )
+            row = cursor.fetchone()
+            return self._row_to_dict(row) if row else None
+
+    def list_scenario_runs(
+        self,
+        scenario_id: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List scenario runs with optional filtering."""
+        if not self._initialized:
+            return []
+
+        with self._lock:
+            query = "SELECT * FROM scenario_runs WHERE 1=1"
+            params = []
+
+            if scenario_id:
+                query += " AND scenario_id = ?"
+                params.append(scenario_id)
+
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+
+            query += " ORDER BY started_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = self._conn.execute(query, params)
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
+
+    def get_scenario_run_stats(self) -> Dict[str, Any]:
+        """Get statistics for scenario runs."""
+        if not self._initialized:
+            return {}
+
+        with self._lock:
+            try:
+                # Total runs
+                cursor = self._conn.execute("SELECT COUNT(*) FROM scenario_runs")
+                total = cursor.fetchone()[0]
+
+                # By status
+                cursor = self._conn.execute(
+                    "SELECT status, COUNT(*) FROM scenario_runs GROUP BY status"
+                )
+                by_status = {row[0]: row[1] for row in cursor.fetchall()}
+
+                # By scenario
+                cursor = self._conn.execute(
+                    "SELECT scenario_id, COUNT(*) FROM scenario_runs GROUP BY scenario_id"
+                )
+                by_scenario = {row[0]: row[1] for row in cursor.fetchall()}
+
+                return {
+                    "total_runs": total,
+                    "by_status": by_status,
+                    "by_scenario": by_scenario,
+                }
+            except Exception as e:
+                logger.error(f"Failed to get scenario run stats: {e}")
+                return {}
+
+    # =========================================================================
 
     def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics."""
@@ -1520,7 +1675,7 @@ class StateStore:
                 "approvals", "jobs", "execution_plans", "live_mode_promotions",
                 "events", "connector_executions", "credential_health",
                 "cost_records", "budget_snapshots", "opportunities", "handoffs",
-                "capacity_limits", "capacity_decisions"
+                "capacity_limits", "capacity_decisions", "scenario_runs"
             ]
 
             for table in tables:

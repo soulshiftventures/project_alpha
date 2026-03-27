@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}{{ scenario.name }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ scenario.name }}</h1>
+    <p class="subtitle">{{ scenario.description }}</p>
+</div>
+
+<!-- Scenario Info -->
+<section class="content-section">
+    <div class="detail-grid">
+        <div class="detail-item">
+            <label>Category</label>
+            <span class="badge badge-{{ scenario.category }}">{{ scenario.category }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Steps</label>
+            <span>{{ scenario.step_count }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Connectors</label>
+            <span>{{ scenario.connectors_used|join(', ') or 'None' }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Dry-Run Capable</label>
+            <span>{{ 'Yes' if scenario.dry_run_capable else 'No' }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Live Capable</label>
+            <span>{{ 'Yes' if scenario.live_capable else 'No' }}</span>
+        </div>
+        <div class="detail-item">
+            <label>Requires Approval</label>
+            <span>{{ 'Yes' if scenario.requires_approval_by_default else 'No' }}</span>
+        </div>
+    </div>
+</section>
+
+<!-- Proof Points -->
+<section class="content-section">
+    <h2>What This Scenario Proves</h2>
+    <ul class="proof-points">
+        {% for point in scenario.proof_points %}
+        <li>{{ point }}</li>
+        {% endfor %}
+    </ul>
+</section>
+
+<!-- Steps -->
+<section class="content-section">
+    <h2>Execution Steps</h2>
+    <div class="step-list">
+        {% for step in scenario.steps %}
+        <div class="step-card">
+            <div class="step-number">{{ loop.index }}</div>
+            <div class="step-content">
+                <h4>{{ step.name }}</h4>
+                <p>{{ step.description }}</p>
+                <div class="step-meta">
+                    <span class="badge">{{ step.step_type }}</span>
+                    {% if step.connector %}
+                    <span class="badge badge-info">{{ step.connector }}</span>
+                    {% endif %}
+                    {% if step.requires_approval %}
+                    <span class="badge badge-warning">Requires Approval</span>
+                    {% endif %}
+                    {% if step.requires_live_mode %}
+                    <span class="badge badge-danger">Live Mode Required</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Launch Form -->
+<section class="content-section">
+    <h2>Launch Scenario</h2>
+    <form action="{{ url_for('run_scenario', scenario_id=scenario.scenario_id) }}" method="POST" class="launch-form">
+        <!-- Required Inputs -->
+        {% if scenario.required_inputs %}
+        <h3>Required Inputs</h3>
+        {% for input_name in scenario.required_inputs %}
+        <div class="form-group">
+            <label for="{{ input_name }}">{{ input_name|replace('_', ' ')|title }}</label>
+            <input type="text" id="{{ input_name }}" name="{{ input_name }}"
+                   placeholder="Enter {{ input_name|replace('_', ' ') }}"
+                   value="{{ scenario.default_inputs.get(input_name, '') }}"
+                   required>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <!-- Optional Inputs -->
+        {% if scenario.optional_inputs %}
+        <h3>Optional Inputs</h3>
+        {% for input_name in scenario.optional_inputs %}
+        <div class="form-group">
+            <label for="{{ input_name }}">{{ input_name|replace('_', ' ')|title }}</label>
+            <input type="text" id="{{ input_name }}" name="{{ input_name }}"
+                   placeholder="Enter {{ input_name|replace('_', ' ') }} (optional)"
+                   value="{{ scenario.default_inputs.get(input_name, '') }}">
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <!-- Execution Options -->
+        <h3>Execution Options</h3>
+        <div class="form-row">
+            <div class="form-group checkbox">
+                <input type="checkbox" id="dry_run" name="dry_run" value="true" checked>
+                <label for="dry_run">Dry-run mode (safe, no external side effects)</label>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group checkbox">
+                <input type="checkbox" id="auto_approve" name="auto_approve" value="true">
+                <label for="auto_approve">Auto-approve required approvals</label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">Launch Scenario</button>
+            <a href="{{ url_for('scenarios') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</section>
+
+<!-- Previous Runs -->
+{% if runs %}
+<section class="content-section">
+    <h2>Previous Runs</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Run ID</th>
+                <th>Status</th>
+                <th>Mode</th>
+                <th>Steps</th>
+                <th>Started</th>
+                <th>Duration</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs %}
+            <tr>
+                <td><code>{{ run.run_id[:16] }}...</code></td>
+                <td><span class="status status-{{ run.status }}">{{ run.status }}</span></td>
+                <td>{{ 'Dry-run' if run.dry_run else 'Live' }}</td>
+                <td>{{ run.completed_steps }}/{{ run.total_steps }}</td>
+                <td>{{ run.started_at[:19] if run.started_at else 'N/A' }}</td>
+                <td>{{ "%.2f"|format(run.duration_seconds) if run.duration_seconds else 'N/A' }}s</td>
+                <td>
+                    <a href="{{ url_for('scenario_run_detail', run_id=run.run_id) }}" class="btn btn-sm">Details</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% endblock %}

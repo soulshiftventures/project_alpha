@@ -4,6 +4,10 @@ SendGrid Connector for Project Alpha.
 Provides transactional email capabilities.
 
 API Documentation: https://docs.sendgrid.com/api-reference/
+
+LIVE EXECUTION STATUS:
+- send_email: Fully implemented with httpx
+- send_template: Dry-run only (template ID validation needed)
 """
 
 from typing import Any, Dict, List, Optional
@@ -17,6 +21,18 @@ from integrations.base import (
     RateLimitError,
     AuthenticationError,
 )
+from integrations.action_contracts import (
+    ActionContract,
+    ActionType,
+    ActionApprovalLevel,
+    register_action_contract,
+)
+
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
@@ -27,9 +43,17 @@ class SendGridConnector(BaseConnector):
     Connector for SendGrid email service.
 
     Supported operations:
-    - send_email: Send a single email
-    - send_template: Send using a dynamic template
+    - send_email: Send a single email (LIVE CAPABLE)
+    - send_template: Send using a dynamic template (dry-run only)
+
+    LIVE EXECUTION STATUS:
+    - send_email: Fully implemented with httpx
+    - send_template: Dry-run only (requires template ID validation)
     """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._register_action_contracts()
 
     @property
     def name(self) -> str:
@@ -65,6 +89,42 @@ class SendGridConnector(BaseConnector):
 
     def get_operations(self) -> List[str]:
         return ["send_email", "send_template"]
+
+    def _register_action_contracts(self) -> None:
+        """Register action contracts for this connector."""
+        # send_email - LIVE CAPABLE
+        register_action_contract(ActionContract(
+            action_name="send_email",
+            connector="sendgrid",
+            action_type=ActionType.NOTIFICATION,
+            description="Send a transactional email via SendGrid",
+            required_params=["to", "subject", "content"],
+            optional_params=["from_email", "from_name", "content_type", "reply_to", "cc", "bcc"],
+            required_credentials=["sendgrid_api_key"],
+            approval_level=ActionApprovalLevel.STANDARD,
+            estimated_cost_class="LOW",
+            is_external=True,
+            supports_live=HTTPX_AVAILABLE,
+            live_implementation_status="fully_live" if HTTPX_AVAILABLE else "dry_run_only",
+            success_indicators=["status_code", "x-message-id"],
+        ))
+
+        # send_template - DRY_RUN ONLY
+        register_action_contract(ActionContract(
+            action_name="send_template",
+            connector="sendgrid",
+            action_type=ActionType.NOTIFICATION,
+            description="Send email using a dynamic template",
+            required_params=["to", "template_id"],
+            optional_params=["from_email", "from_name", "dynamic_template_data"],
+            required_credentials=["sendgrid_api_key"],
+            approval_level=ActionApprovalLevel.STANDARD,
+            estimated_cost_class="LOW",
+            is_external=True,
+            supports_live=False,
+            live_implementation_status="dry_run_only",
+            success_indicators=["status_code"],
+        ))
 
     def _health_check_impl(self) -> ConnectorResult:
         """Check SendGrid API connectivity."""
@@ -109,7 +169,7 @@ class SendGridConnector(BaseConnector):
         params: Dict[str, Any],
     ) -> ConnectorResult:
         """
-        Send a single email.
+        Send a single email - LIVE EXECUTION.
 
         Params:
             to: Recipient email (required) - string or list
@@ -122,6 +182,12 @@ class SendGridConnector(BaseConnector):
             cc: CC recipients (optional)
             bcc: BCC recipients (optional)
         """
+        if not HTTPX_AVAILABLE:
+            return ConnectorResult.error_result(
+                "httpx not installed - cannot execute live",
+                error_type="dependency_missing",
+            )
+
         to = params.get("to")
         if not to:
             return ConnectorResult.error_result(
@@ -156,31 +222,113 @@ class SendGridConnector(BaseConnector):
                 error_type="validation_error",
             )
 
-        # In real implementation:
-        # import sendgrid
-        # from sendgrid.helpers.mail import Mail
-        # message = Mail(
-        #     from_email=from_email,
-        #     to_emails=to,
-        #     subject=subject,
-        #     plain_text_content=content if content_type == 'text/plain' else None,
-        #     html_content=content if content_type == 'text/html' else None,
-        # )
-        # sg = sendgrid.SendGridAPIClient(api_key=api_key)
-        # response = sg.send(message)
+        # Normalize recipients to list
+        if isinstance(to, str):
+            to_list = [to]
+        else:
+            to_list = list(to)
 
-        return ConnectorResult.success_result(
-            data={
-                "status_code": 202,
-                "to": to,
-                "subject": subject,
-                "from": from_email,
-                "message": "Live API call would execute here",
-            },
-            metadata={
-                "content_type": params.get("content_type", "text/plain"),
-            },
-        )
+        # Build SendGrid v3 Mail Send payload
+        content_type = params.get("content_type", "text/plain")
+        from_name = params.get("from_name")
+
+        personalizations = {
+            "to": [{"email": email} for email in to_list],
+        }
+
+        # Add CC if provided
+        if params.get("cc"):
+            cc_list = params["cc"] if isinstance(params["cc"], list) else [params["cc"]]
+            personalizations["cc"] = [{"email": email} for email in cc_list]
+
+        # Add BCC if provided
+        if params.get("bcc"):
+            bcc_list = params["bcc"] if isinstance(params["bcc"], list) else [params["bcc"]]
+            personalizations["bcc"] = [{"email": email} for email in bcc_list]
+
+        payload = {
+            "personalizations": [personalizations],
+            "from": {"email": from_email},
+            "subject": subject,
+            "content": [
+                {
+                    "type": content_type,
+                    "value": content,
+                }
+            ],
+        }
+
+        if from_name:
+            payload["from"]["name"] = from_name
+
+        if params.get("reply_to"):
+            payload["reply_to"] = {"email": params["reply_to"]}
+
+        # Execute live API call
+        try:
+            response = httpx.post(
+                f"{self.base_url}/mail/send",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+
+            # SendGrid returns 202 Accepted with empty body on success
+            message_id = response.headers.get("x-message-id", "unknown")
+
+            return ConnectorResult.success_result(
+                data={
+                    "status_code": response.status_code,
+                    "message_id": message_id,
+                    "recipients": to_list,
+                    "subject": subject,
+                },
+                metadata={
+                    "http_status": response.status_code,
+                    "live_execution": True,
+                    "x-message-id": message_id,
+                    "recipient_count": len(to_list),
+                    "content_type": content_type,
+                },
+            )
+
+        except httpx.HTTPStatusError as e:
+            error_body = ""
+            try:
+                error_json = e.response.json()
+                # Extract error messages from SendGrid response
+                errors = error_json.get("errors", [])
+                if errors:
+                    error_body = "; ".join(err.get("message", "") for err in errors)
+                else:
+                    error_body = e.response.text[:200]
+            except Exception:
+                error_body = e.response.text[:200] if e.response.text else "Unknown error"
+            return ConnectorResult.error_result(
+                f"HTTP {e.response.status_code}: {error_body}",
+                error_type="http_error",
+                metadata={"status_code": e.response.status_code},
+            )
+        except httpx.TimeoutException:
+            return ConnectorResult.error_result(
+                "Request timed out",
+                error_type="timeout",
+            )
+        except httpx.RequestError as e:
+            return ConnectorResult.error_result(
+                f"Request failed: {str(e)}",
+                error_type="connection_error",
+            )
+        except Exception as e:
+            logger.error(f"SendGrid send_email failed: {e}")
+            return ConnectorResult.error_result(
+                str(e),
+                error_type=type(e).__name__,
+            )
 
     def _execute_send_template(
         self,
