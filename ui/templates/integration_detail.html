@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}{{ connector.name | title }} - Integrations - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ connector.name | title }} Connector</h1>
+    <p>{{ connector.description }}</p>
+</div>
+
+<div class="section">
+    <h2>Status</h2>
+    <div class="stats-grid">
+        <div class="stat-card {% if connector.status == 'ready' %}success{% elif connector.status == 'unconfigured' %}warning{% else %}danger{% endif %}">
+            <div class="stat-value">{{ connector.status | title }}</div>
+            <div class="stat-label">Status</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ connector.category }}</div>
+            <div class="stat-label">Category</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{% if connector.enabled %}Yes{% else %}No{% endif %}</div>
+            <div class="stat-label">Enabled</div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Configuration</h2>
+    <table class="data-table">
+        <tr>
+            <th>Base URL</th>
+            <td>{{ connector.base_url or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Supports Dry-Run</th>
+            <td>{% if connector.supports_dry_run %}<span class="text-success">Yes</span>{% else %}<span class="text-muted">No</span>{% endif %}</td>
+        </tr>
+        <tr>
+            <th>Requires Approval</th>
+            <td>{% if connector.requires_approval %}<span class="text-warning">Yes</span>{% else %}<span class="text-muted">No</span>{% endif %}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="section">
+    <h2>Required Credentials</h2>
+    <ul class="item-list">
+        {% for cred in connector.required_credentials %}
+        <li>
+            <code>{{ cred }}</code>
+            <span class="text-muted">(required)</span>
+        </li>
+        {% endfor %}
+        {% for cred in connector.optional_credentials %}
+        <li>
+            <code>{{ cred }}</code>
+            <span class="text-muted">(optional)</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<div class="section">
+    <h2>Available Operations</h2>
+    <ul class="item-list">
+        {% for op in connector.operations %}
+        <li><code>{{ op }}</code></li>
+        {% endfor %}
+    </ul>
+</div>
+
+<div class="section">
+    <h2>Actions</h2>
+    <form action="{{ url_for('integration_health', connector_name=connector.name) }}" method="post" style="display:inline;">
+        <button type="submit" class="btn">Run Health Check</button>
+    </form>
+    <a href="{{ url_for('integrations') }}" class="btn btn-secondary">Back to Integrations</a>
+</div>
+{% endblock %}

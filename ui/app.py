@@ -448,6 +448,129 @@ def api_backends():
 
 
 # =============================================================================
+# Integrations View
+# =============================================================================
+
+@app.route("/integrations")
+def integrations():
+    """Integrations overview view."""
+    service = get_service()
+    summary = service.get_integrations_summary()
+    connectors = service.get_connectors()
+
+    return render_template(
+        "integrations.html",
+        summary=summary,
+        connectors=connectors,
+    )
+
+
+@app.route("/integrations/<connector_name>")
+def integration_detail(connector_name: str):
+    """Connector detail view."""
+    service = get_service()
+    connector = service.get_connector_detail(connector_name)
+
+    if not connector:
+        return render_template("error.html", message="Connector not found"), 404
+
+    return render_template(
+        "integration_detail.html",
+        connector=connector,
+    )
+
+
+@app.route("/integrations/<connector_name>/health", methods=["POST"])
+def integration_health(connector_name: str):
+    """Run health check on a connector."""
+    service = get_service()
+    result = service.connector_health_check(connector_name)
+
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(result)
+
+    return redirect(url_for("integration_detail", connector_name=connector_name))
+
+
+@app.route("/api/integrations")
+def api_integrations():
+    """API: Get integrations summary."""
+    service = get_service()
+    summary = service.get_integrations_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/integrations/connectors")
+def api_connectors():
+    """API: Get all connectors."""
+    service = get_service()
+    connectors = service.get_connectors()
+    return jsonify(connectors)
+
+
+@app.route("/api/integrations/connectors/<connector_name>")
+def api_connector_detail(connector_name: str):
+    """API: Get connector detail."""
+    service = get_service()
+    connector = service.get_connector_detail(connector_name)
+    if not connector:
+        return jsonify({"error": "Connector not found"}), 404
+    return jsonify(connector)
+
+
+@app.route("/api/integrations/health")
+def api_health_all():
+    """API: Run health check on all connectors."""
+    service = get_service()
+    results = service.connector_health_check_all()
+    return jsonify(results)
+
+
+# =============================================================================
+# Credentials View
+# =============================================================================
+
+@app.route("/credentials")
+def credentials():
+    """Credentials status view."""
+    service = get_service()
+    summary = service.get_credentials_summary()
+    credential_list = service.get_credential_list()
+    rotation = service.get_rotation_summary()
+
+    return render_template(
+        "credentials.html",
+        summary=summary,
+        credentials=credential_list,
+        rotation=rotation,
+    )
+
+
+@app.route("/api/credentials")
+def api_credentials():
+    """API: Get credentials summary."""
+    service = get_service()
+    summary = service.get_credentials_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/credentials/list")
+def api_credential_list():
+    """API: Get all credentials."""
+    service = get_service()
+    credentials = service.get_credential_list()
+    return jsonify(credentials)
+
+
+@app.route("/api/credentials/rotation")
+def api_rotation():
+    """API: Get rotation schedules."""
+    service = get_service()
+    schedules = service.get_rotation_schedules()
+    return jsonify(schedules)
+
+
+# =============================================================================
 # Error Handlers
 # =============================================================================
 
@@ -491,6 +614,8 @@ if __name__ == "__main__":
     /jobs         - Job Monitor
     /events       - Event Log
     /backends     - Available Backends
+    /integrations - Integration Status
+    /credentials  - Credential Health
 
   API endpoints available at /api/*
 

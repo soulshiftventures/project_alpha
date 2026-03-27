@@ -482,6 +482,102 @@ class OperatorService:
         return []
 
 
+    # -------------------------------------------------------------------------
+    # Integrations
+    # -------------------------------------------------------------------------
+
+    def get_integrations_summary(self) -> Dict[str, Any]:
+        """Get integration layer summary."""
+        try:
+            from core.integration_skill import get_integration_skill
+            skill = get_integration_skill()
+            return skill.get_summary()
+        except Exception as e:
+            return {"error": str(e), "connectors": {}, "policies": {}}
+
+    def get_connectors(self) -> List[Dict[str, Any]]:
+        """Get all connectors with status."""
+        try:
+            from core.integration_skill import get_integration_skill
+            skill = get_integration_skill()
+            return skill.get_available_connectors()
+        except Exception:
+            return []
+
+    def get_connector_detail(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get detailed info for a connector."""
+        try:
+            from core.integration_skill import get_integration_skill
+            skill = get_integration_skill()
+            return skill.get_connector_status(name)
+        except Exception:
+            return None
+
+    def connector_health_check(self, name: str) -> Dict[str, Any]:
+        """Run health check on a connector."""
+        try:
+            from core.integration_skill import get_integration_skill
+            skill = get_integration_skill()
+            result = skill.health_check(name)
+            return result.to_dict()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def connector_health_check_all(self) -> Dict[str, Dict[str, Any]]:
+        """Run health check on all connectors."""
+        try:
+            from core.integration_skill import get_integration_skill
+            skill = get_integration_skill()
+            return skill.health_check_all()
+        except Exception:
+            return {}
+
+    # -------------------------------------------------------------------------
+    # Credentials
+    # -------------------------------------------------------------------------
+
+    def get_credentials_summary(self) -> Dict[str, Any]:
+        """Get credentials health summary."""
+        try:
+            from core.secrets_manager import get_secrets_manager
+            manager = get_secrets_manager()
+            return manager.get_health_summary()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_credential_list(self) -> List[Dict[str, Any]]:
+        """Get list of all credentials with safe metadata."""
+        try:
+            from core.secrets_manager import get_secrets_manager
+            manager = get_secrets_manager()
+            secrets = []
+            for name in manager.list_secrets():
+                meta = manager.get_metadata(name)
+                if meta:
+                    secrets.append(meta.to_safe_dict())
+            return secrets
+        except Exception:
+            return []
+
+    def get_rotation_summary(self) -> Dict[str, Any]:
+        """Get credential rotation summary."""
+        try:
+            from core.rotation_manager import get_rotation_manager
+            manager = get_rotation_manager()
+            return manager.get_summary()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_rotation_schedules(self) -> List[Dict[str, Any]]:
+        """Get all rotation schedules."""
+        try:
+            from core.rotation_manager import get_rotation_manager
+            manager = get_rotation_manager()
+            return manager.get_all_schedules()
+        except Exception:
+            return []
+
+
 # Singleton instance
 _operator_service: Optional[OperatorService] = None
 

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Integrations - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Integrations</h1>
+    <p>External service connectors and their status</p>
+</div>
+
+<div class="section">
+    <h2>Summary</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ summary.connectors.total | default(0) }}</div>
+            <div class="stat-label">Total Connectors</div>
+        </div>
+        <div class="stat-card {% if summary.connectors.ready > 0 %}success{% endif %}">
+            <div class="stat-value">{{ summary.connectors.ready | default(0) }}</div>
+            <div class="stat-label">Ready</div>
+        </div>
+        <div class="stat-card {% if summary.connectors.unconfigured > 0 %}warning{% endif %}">
+            <div class="stat-value">{{ summary.connectors.unconfigured | default(0) }}</div>
+            <div class="stat-label">Unconfigured</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ summary.policies.total_policies | default(0) }}</div>
+            <div class="stat-label">Policies</div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Connectors</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Dry-Run</th>
+                <th>Approval</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for connector in connectors %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('integration_detail', connector_name=connector.name) }}">
+                        <strong>{{ connector.name }}</strong>
+                    </a>
+                    <div class="text-muted">{{ connector.description }}</div>
+                </td>
+                <td>
+                    <span class="badge badge-info">{{ connector.category }}</span>
+                </td>
+                <td>
+                    {% if connector.status == 'ready' %}
+                    <span class="badge badge-success">Ready</span>
+                    {% elif connector.status == 'unconfigured' %}
+                    <span class="badge badge-warning">Unconfigured</span>
+                    {% elif connector.status == 'disabled' %}
+                    <span class="badge badge-secondary">Disabled</span>
+                    {% else %}
+                    <span class="badge badge-danger">{{ connector.status }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if connector.supports_dry_run %}
+                    <span class="text-success">Yes</span>
+                    {% else %}
+                    <span class="text-muted">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if connector.requires_approval %}
+                    <span class="text-warning">Required</span>
+                    {% else %}
+                    <span class="text-muted">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form action="{{ url_for('integration_health', connector_name=connector.name) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-small">Health Check</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="section">
+    <h2>Default Mode</h2>
+    <p>
+        <strong>Dry-Run Default:</strong>
+        {% if summary.default_dry_run %}
+        <span class="badge badge-info">Enabled</span>
+        <span class="text-muted"> - Operations will simulate by default</span>
+        {% else %}
+        <span class="badge badge-warning">Disabled</span>
+        <span class="text-muted"> - Operations will execute live by default</span>
+        {% endif %}
+    </p>
+</div>
+{% endblock %}
