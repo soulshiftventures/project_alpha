@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Costs & Budget - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Cost & Budget Overview</h1>
+    <p class="subtitle">Track costs and budget utilization</p>
+</div>
+
+<section class="panel">
+    <h2>Budget Status</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.2f"|format(budget_summary.global_spend or 0) }}</span>
+            <span class="stat-label">Global Spend</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.2f"|format(budget_summary.global_limit or 0) }}</span>
+            <span class="stat-label">Global Limit</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ "%.1f"|format((budget_summary.global_utilization or 0) * 100) }}%</span>
+            <span class="stat-label">Utilization</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.2f"|format(budget_summary.global_remaining or 0) }}</span>
+            <span class="stat-label">Remaining</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>Cost Summary</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">{{ cost_summary.total_records or 0 }}</span>
+            <span class="stat-label">Total Records</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.4f"|format(cost_summary.total_estimated or 0) }}</span>
+            <span class="stat-label">Total Estimated</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.4f"|format(cost_summary.total_actual or 0) }}</span>
+            <span class="stat-label">Total Actual</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ cost_summary.records_with_actual or 0 }}</span>
+            <span class="stat-label">Actual Recorded</span>
+        </div>
+    </div>
+</section>
+
+<div class="two-column">
+    <section class="panel">
+        <h2>Cost by Connector</h2>
+        {% if cost_by_connector %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Connector</th>
+                    <th>Total Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for connector, amount in cost_by_connector.items() %}
+                <tr>
+                    <td>{{ connector }}</td>
+                    <td>${{ "%.4f"|format(amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">No connector costs recorded</p>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <h2>Cost by Business</h2>
+        {% if cost_by_business %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Business</th>
+                    <th>Total Cost</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for business_id, amount in cost_by_business.items() %}
+                <tr>
+                    <td><code>{{ business_id[:8] }}...</code></td>
+                    <td>${{ "%.4f"|format(amount) }}</td>
+                    <td>
+                        <a href="{{ url_for('cost_business_detail', business_id=business_id) }}" class="btn btn-small">Detail</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">No business costs recorded</p>
+        {% endif %}
+    </section>
+</div>
+
+<section class="panel">
+    <h2>Cost Policies</h2>
+    {% if cost_policies and not cost_policies[0].get('error') %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Rule</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Outcome</th>
+                <th>Priority</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for policy in cost_policies %}
+            <tr>
+                <td><code>{{ policy.rule_id }}</code></td>
+                <td>{{ policy.name }}</td>
+                <td>{{ policy.description }}</td>
+                <td><span class="status-badge {{ policy.outcome }}">{{ policy.outcome }}</span></td>
+                <td>{{ policy.priority }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No cost policies configured</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <h2>Recent Cost Records</h2>
+    {% if recent_costs %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Record ID</th>
+                <th>Estimated</th>
+                <th>Actual</th>
+                <th>Connector</th>
+                <th>Class</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cost in recent_costs %}
+            <tr>
+                <td><code>{{ cost.cost_id[:8] }}...</code></td>
+                <td>{{ cost.record_type }}</td>
+                <td><code>{{ (cost.record_id or '-')[:8] }}...</code></td>
+                <td>${{ "%.4f"|format(cost.estimated_amount or 0) }}</td>
+                <td>{{ ("$%.4f"|format(cost.actual_amount)) if cost.actual_amount else '-' }}</td>
+                <td>{{ cost.connector or '-' }}</td>
+                <td><span class="status-badge {{ cost.cost_class or 'unknown' }}">{{ cost.cost_class or 'unknown' }}</span></td>
+                <td>{{ cost.created_at[:19] if cost.created_at else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No cost records found</p>
+    {% endif %}
+</section>
+{% endblock %}

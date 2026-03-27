@@ -15,11 +15,15 @@
         </div>
         <ul class="nav-links">
             <li><a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="active"{% endif %}>Overview</a></li>
+            <li><a href="{{ url_for('discovery') }}" {% if 'discovery' in request.endpoint or 'opportunity' in request.endpoint %}class="active"{% endif %}>Discovery</a></li>
             <li><a href="{{ url_for('portfolio') }}" {% if 'portfolio' in request.endpoint %}class="active"{% endif %}>Portfolio</a></li>
             <li><a href="{{ url_for('goals') }}" {% if 'goal' in request.endpoint %}class="active"{% endif %}>Goals</a></li>
             <li><a href="{{ url_for('plans') }}" {% if 'plan' in request.endpoint %}class="active"{% endif %}>Plans</a></li>
             <li><a href="{{ url_for('approvals') }}" {% if 'approv' in request.endpoint %}class="active"{% endif %}>Approvals</a></li>
             <li><a href="{{ url_for('jobs') }}" {% if 'job' in request.endpoint %}class="active"{% endif %}>Jobs</a></li>
+            <li><a href="{{ url_for('costs') }}" {% if 'cost' in request.endpoint %}class="active"{% endif %}>Costs</a></li>
+            <li><a href="{{ url_for('capacity') }}" {% if 'capacity' in request.endpoint %}class="active"{% endif %}>Capacity</a></li>
+            <li><a href="{{ url_for('connector_actions_list') }}" {% if 'connector_action' in request.endpoint %}class="active"{% endif %}>Connector Actions</a></li>
             <li><a href="{{ url_for('events') }}" {% if 'event' in request.endpoint %}class="active"{% endif %}>Events</a></li>
             <li><a href="{{ url_for('backends') }}" {% if 'backend' in request.endpoint %}class="active"{% endif %}>Backends</a></li>
         </ul>

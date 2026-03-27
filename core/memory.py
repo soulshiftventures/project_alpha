@@ -5,7 +5,7 @@ Stores decisions, results, and long-term context
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 
@@ -48,7 +48,7 @@ class Memory:
         memory = self._read_memory()
 
         decision_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "decision": decision,
             "context": context,
             "outcome": outcome,
@@ -70,7 +70,7 @@ class Memory:
         memory = self._read_memory()
 
         result_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "task_id": task_id,
             "task_title": task_title,
             "status": result.get("status", "unknown"),
@@ -94,7 +94,7 @@ class Memory:
         memory = self._read_memory()
 
         learning_entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "category": category,
             "insight": insight,
             "confidence": max(0.0, min(1.0, confidence)),

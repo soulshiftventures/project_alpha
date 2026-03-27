@@ -13,7 +13,7 @@ from core.agent_contracts import (
 )
 from core.agent_registry import AgentRegistry, AgentDefinition
 from core.hierarchy_definitions import create_default_hierarchy, get_agents_for_capability
-from core.event_logger import EventLogger, EventType
+from core.event_logger import EventLogger, EventType, EventSeverity
 from core.approval_manager import ApprovalManager, ApprovalClass
 from core.council_manager import CouncilManager
 from core.decision_board import DecisionBoard
@@ -28,6 +28,7 @@ from core.execution_plan import (
     ExecutionDomain, ExecutionStatus, SkillBundle,
     get_plan_builder, build_execution_plan
 )
+from core.execution_domains import classify_goal_domain, get_domain_metadata
 
 # Runtime Abstraction Layer imports
 from core.runtime_manager import (
@@ -286,7 +287,10 @@ class ChiefOrchestrator:
                 execution_plan.routing_decision = routing
 
             # Step 4: Execute based on routing (now skill-aware)
-            if routing == RoutingDecision.DIRECT_EXECUTION:
+            if routing == "DISCOVERY_MODE":
+                result = self._handle_discovery_mode(request, business, result)
+
+            elif routing == RoutingDecision.DIRECT_EXECUTION:
                 result = self._handle_direct_execution(request, business, result)
 
             elif routing == RoutingDecision.COUNCIL_ADVICE:
@@ -335,16 +339,39 @@ class ChiefOrchestrator:
         result: OrchestrationResult
     ) -> Optional[ExecutionPlan]:
         """
-        Create a skill-aware execution plan.
+        Create a skill-aware execution plan with domain classification.
 
-        Selects relevant skills and creates a structured plan.
+        Classifies the goal into an execution domain, then selects relevant
+        skills and creates a structured plan.
         """
         self._ensure_skills_loaded()
 
         if not self._skill_selector:
             return None
 
-        # Select skills for the task
+        # Classify goal into execution domain
+        domain_context = {
+            "role": role_id,
+            "business_id": business.get("id") if business else None,
+            "stage": business.get("stage") if business else None,
+        }
+        classified_domain = classify_goal_domain(objective, domain_context)
+
+        # Log domain classification
+        self._logger.log(
+            event_type=EventType.REQUEST_ROUTED,
+            message=f"Goal classified as {classified_domain.value} domain",
+            severity=EventSeverity.INFO,
+            agent_id="chief_orchestrator",
+            request_id=request.request_id,
+            details={
+                "objective": objective[:100],
+                "domain": classified_domain.value,
+                "domain_metadata": get_domain_metadata(classified_domain).to_dict()
+            }
+        )
+
+        # Select skills for the task (domain-aware in future enhancement)
         selection_result = self._skill_selector.select(
             objective,
             max_recommendations=5
@@ -485,6 +512,7 @@ class ChiefOrchestrator:
         Determine where to route the request.
 
         Routing logic:
+        - Discovery mode (idea/opportunity evaluation) -> Discovery pipeline
         - Strategic/high-level objectives -> Council then Board
         - Operational requests -> C-Suite delegation
         - Task execution -> Department execution
@@ -492,6 +520,17 @@ class ChiefOrchestrator:
         """
         objective = request.objective.lower()
         priority = request.priority
+
+        # Discovery mode detection
+        # Use more specific phrases to avoid false positives
+        discovery_keywords = [
+            "business idea", "business opportunity", "evaluate opportunity",
+            "new business", "what if we", "should we build",
+            "explore opportunity", "potential business", "evaluate idea",
+            "i have an idea", "rough idea", "opportunity space"
+        ]
+        if any(kw in objective for kw in discovery_keywords):
+            return "DISCOVERY_MODE"
 
         # Critical priority always goes to board
         if priority == "critical":
@@ -559,6 +598,116 @@ class ChiefOrchestrator:
                 if agents:
                     return capability
         return None
+
+    def _handle_discovery_mode(
+        self,
+        request: AgentRequest,
+        business: Optional[Dict[str, Any]],
+        result: OrchestrationResult
+    ) -> OrchestrationResult:
+        """
+        Handle discovery-mode requests for business opportunity evaluation.
+
+        Routes request through discovery pipeline to evaluate and recommend
+        opportunities from rough ideas, problems, or curiosities.
+
+        Args:
+            request: Agent request
+            business: Business context
+            result: Orchestration result to update
+
+        Returns:
+            Updated orchestration result
+        """
+        from core.discovery_pipeline import process_discovery_input
+        from core.discovery_models import OperatorConstraints
+        from core.opportunity_registry import OpportunityRegistry
+        from core.state_store import get_state_store
+
+        self._logger.log_event(
+            event_type=EventType.GENERAL,
+            severity=EventSeverity.INFO,
+            message=f"Discovery mode activated for request: {request.request_id}",
+            request_id=request.request_id,
+            agent_id="chief_orchestrator"
+        )
+
+        try:
+            # Use default operator constraints
+            # In production, could load from principal preferences
+            constraints = OperatorConstraints()
+
+            # Process through discovery pipeline
+            opportunity_records = process_discovery_input(
+                raw_text=request.objective,
+                constraints=constraints,
+                submitted_by=request.requester,
+            )
+
+            # Save to registry
+            state_store = get_state_store()
+            if not state_store.is_initialized:
+                state_store.initialize()
+
+            registry = OpportunityRegistry(state_store)
+
+            saved_ids = []
+            for record in opportunity_records:
+                registry.save_opportunity(record)
+                saved_ids.append(record.opportunity_id)
+
+                self._logger.log_event(
+                    event_type=EventType.GENERAL,
+                    severity=EventSeverity.INFO,
+                    message=f"Opportunity evaluated: {record.hypothesis.title}",
+                    request_id=request.request_id,
+                    agent_id="chief_orchestrator",
+                    details={
+                        "opportunity_id": record.opportunity_id,
+                        "score": record.score.overall_score,
+                        "recommendation": record.recommendation.action.value,
+                    }
+                )
+
+            # Create success response
+            result.success = True
+            result.executed_by = ["chief_orchestrator", "discovery_pipeline"]
+            result.response = create_response(
+                request_id=request.request_id,
+                responder="chief_orchestrator",
+                status=RequestStatus.COMPLETED,
+                result={
+                    "mode": "discovery",
+                    "opportunities_evaluated": len(opportunity_records),
+                    "opportunity_ids": saved_ids,
+                    "opportunities": [opp.to_dict() for opp in opportunity_records],
+                }
+            )
+
+            self._logger.log_request_completed(
+                request_id=request.request_id,
+                agent_id="chief_orchestrator",
+                result={"opportunities_evaluated": len(opportunity_records)}
+            )
+
+        except Exception as e:
+            result.success = False
+            result.errors.append(f"Discovery mode error: {str(e)}")
+            result.response = create_response(
+                request_id=request.request_id,
+                responder="chief_orchestrator",
+                status=RequestStatus.FAILED,
+                errors=[f"Discovery processing failed: {str(e)}"]
+            )
+
+            self._logger.log_error(
+                message=f"Discovery mode error: {str(e)}",
+                error=str(e),
+                request_id=request.request_id,
+                agent_id="chief_orchestrator"
+            )
+
+        return result
 
     def _handle_direct_execution(
         self,
@@ -938,15 +1087,32 @@ class ChiefOrchestrator:
         else:
             domain = ExecutionDomain.UNKNOWN
 
-        # Map domain to department
+        # Map domain to department (domain-neutral routing)
         domain_to_dept = {
+            # Knowledge & Strategy
             ExecutionDomain.RESEARCH: "dept_research",
+            ExecutionDomain.STRATEGY: "dept_operations",  # Strategic planning routed to operations
             ExecutionDomain.PLANNING: "dept_planning",
+
+            # Product & Engineering
             ExecutionDomain.PRODUCT: "dept_product",
-            ExecutionDomain.OPERATIONS: "dept_operations",
-            ExecutionDomain.GROWTH: "dept_growth",
-            ExecutionDomain.AUTOMATION: "dept_automation",
+            ExecutionDomain.ENGINEERING: "dept_product",  # Engineering routed to product dept
             ExecutionDomain.VALIDATION: "dept_validation",
+
+            # Operations & Execution
+            ExecutionDomain.OPERATIONS: "dept_operations",
+            ExecutionDomain.AUTOMATION: "dept_automation",
+            ExecutionDomain.INTERNAL_ADMIN: "dept_operations",
+
+            # Finance & Compliance
+            ExecutionDomain.FINANCE: "dept_operations",  # Finance routed to operations
+            ExecutionDomain.COMPLIANCE: "dept_operations",  # Compliance routed to operations
+
+            # Customer & Growth
+            ExecutionDomain.GROWTH: "dept_growth",
+            ExecutionDomain.CUSTOMER_SUPPORT: "dept_operations",  # Support routed to operations
+
+            # Content & Communication
             ExecutionDomain.CONTENT: "dept_content",
         }
 

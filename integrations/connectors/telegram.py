@@ -17,6 +17,18 @@ from integrations.base import (
     RateLimitError,
     AuthenticationError,
 )
+from integrations.action_contracts import (
+    ActionContract,
+    ActionType,
+    ActionApprovalLevel,
+    register_action_contract,
+)
+
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
@@ -27,10 +39,19 @@ class TelegramConnector(BaseConnector):
     Connector for Telegram Bot API.
 
     Supported operations:
-    - send_message: Send a text message
-    - send_document: Send a document/file
-    - get_updates: Get recent updates (for testing)
+    - send_message: Send a text message (LIVE CAPABLE)
+    - send_document: Send a document/file (dry-run only)
+    - get_updates: Get recent updates (LIVE CAPABLE)
+
+    LIVE EXECUTION STATUS:
+    - send_message: Fully implemented with httpx
+    - get_updates: Fully implemented with httpx
+    - send_document: Dry-run only (requires file handling)
     """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._register_action_contracts()
 
     @property
     def name(self) -> str:
@@ -66,6 +87,58 @@ class TelegramConnector(BaseConnector):
 
     def get_operations(self) -> List[str]:
         return ["send_message", "send_document", "get_updates"]
+
+    def _register_action_contracts(self) -> None:
+        """Register action contracts for this connector."""
+        # send_message - LIVE CAPABLE
+        register_action_contract(ActionContract(
+            action_name="send_message",
+            connector="telegram",
+            action_type=ActionType.NOTIFICATION,
+            description="Send a text message via Telegram bot",
+            required_params=["text"],
+            optional_params=["chat_id", "parse_mode", "disable_notification", "reply_to_message_id"],
+            required_credentials=["telegram_bot_token"],
+            approval_level=ActionApprovalLevel.STANDARD,
+            estimated_cost_class="MINIMAL",
+            is_external=True,
+            supports_live=HTTPX_AVAILABLE,
+            live_implementation_status="fully_live" if HTTPX_AVAILABLE else "dry_run_only",
+            success_indicators=["message_id", "ok"],
+        ))
+
+        # get_updates - LIVE CAPABLE
+        register_action_contract(ActionContract(
+            action_name="get_updates",
+            connector="telegram",
+            action_type=ActionType.DATA_FETCH,
+            description="Get recent updates from Telegram bot",
+            optional_params=["limit", "offset"],
+            required_credentials=["telegram_bot_token"],
+            approval_level=ActionApprovalLevel.NONE,
+            estimated_cost_class="FREE",
+            is_external=False,
+            supports_live=HTTPX_AVAILABLE,
+            live_implementation_status="fully_live" if HTTPX_AVAILABLE else "dry_run_only",
+            success_indicators=["ok", "result"],
+        ))
+
+        # send_document - DRY_RUN ONLY
+        register_action_contract(ActionContract(
+            action_name="send_document",
+            connector="telegram",
+            action_type=ActionType.NOTIFICATION,
+            description="Send a document via Telegram bot",
+            required_params=["document"],
+            optional_params=["chat_id", "caption", "parse_mode"],
+            required_credentials=["telegram_bot_token"],
+            approval_level=ActionApprovalLevel.ELEVATED,
+            estimated_cost_class="MINIMAL",
+            is_external=True,
+            supports_live=False,
+            live_implementation_status="dry_run_only",
+            success_indicators=["message_id"],
+        ))
 
     def _health_check_impl(self) -> ConnectorResult:
         """Check Telegram Bot API connectivity."""
@@ -115,7 +188,7 @@ class TelegramConnector(BaseConnector):
         params: Dict[str, Any],
     ) -> ConnectorResult:
         """
-        Send a text message.
+        Send a text message - LIVE EXECUTION.
 
         Params:
             chat_id: Target chat ID (required, or uses default from env)
@@ -124,6 +197,12 @@ class TelegramConnector(BaseConnector):
             disable_notification: Send silently (optional)
             reply_to_message_id: Message to reply to (optional)
         """
+        if not HTTPX_AVAILABLE:
+            return ConnectorResult.error_result(
+                "httpx not installed - cannot execute live",
+                error_type="dependency_missing",
+            )
+
         # Get chat_id from params or default credential
         chat_id = params.get("chat_id")
         if not chat_id:
@@ -144,28 +223,66 @@ class TelegramConnector(BaseConnector):
                 error_type="validation_error",
             )
 
-        # In real implementation:
-        # response = httpx.post(
-        #     f"{self.base_url}/bot{bot_token}/sendMessage",
-        #     json={
-        #         "chat_id": chat_id,
-        #         "text": text,
-        #         "parse_mode": params.get("parse_mode"),
-        #         "disable_notification": params.get("disable_notification", False),
-        #     }
-        # )
+        # Build request payload
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+        }
 
-        return ConnectorResult.success_result(
-            data={
-                "message_id": None,
-                "chat_id": chat_id,
-                "text": text,
-                "message": "Live API call would execute here",
-            },
-            metadata={
-                "parse_mode": params.get("parse_mode"),
-            },
-        )
+        if params.get("parse_mode"):
+            payload["parse_mode"] = params["parse_mode"]
+        if params.get("disable_notification") is not None:
+            payload["disable_notification"] = params["disable_notification"]
+        if params.get("reply_to_message_id"):
+            payload["reply_to_message_id"] = params["reply_to_message_id"]
+
+        # Execute live API call
+        try:
+            response = httpx.post(
+                f"{self.base_url}/bot{bot_token}/sendMessage",
+                json=payload,
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            result_data = response.json()
+
+            if not result_data.get("ok"):
+                return ConnectorResult.error_result(
+                    result_data.get("description", "Telegram API returned ok=false"),
+                    error_type="api_error",
+                    metadata={"response": result_data},
+                )
+
+            return ConnectorResult.success_result(
+                data=result_data.get("result"),
+                metadata={
+                    "http_status": response.status_code,
+                    "live_execution": True,
+                },
+            )
+
+        except httpx.HTTPStatusError as e:
+            return ConnectorResult.error_result(
+                f"HTTP {e.response.status_code}: {e.response.text}",
+                error_type="http_error",
+                metadata={"status_code": e.response.status_code},
+            )
+        except httpx.TimeoutException:
+            return ConnectorResult.error_result(
+                "Request timed out",
+                error_type="timeout",
+            )
+        except httpx.RequestError as e:
+            return ConnectorResult.error_result(
+                f"Request failed: {str(e)}",
+                error_type="connection_error",
+            )
+        except Exception as e:
+            logger.error(f"Telegram send_message failed: {e}")
+            return ConnectorResult.error_result(
+                str(e),
+                error_type=type(e).__name__,
+            )
 
     def _execute_send_document(
         self,
@@ -218,21 +335,73 @@ class TelegramConnector(BaseConnector):
         params: Dict[str, Any],
     ) -> ConnectorResult:
         """
-        Get recent updates (for testing connectivity).
+        Get recent updates (for testing connectivity) - LIVE EXECUTION.
 
         Params:
             limit: Number of updates to retrieve (optional, default 10)
             offset: Update offset (optional)
         """
-        return ConnectorResult.success_result(
-            data={
-                "updates": [],
-                "message": "Live API call would execute here",
-            },
-            metadata={
-                "limit": params.get("limit", 10),
-            },
-        )
+        if not HTTPX_AVAILABLE:
+            return ConnectorResult.error_result(
+                "httpx not installed - cannot execute live",
+                error_type="dependency_missing",
+            )
+
+        # Build request params
+        request_params = {
+            "limit": params.get("limit", 10),
+        }
+        if params.get("offset") is not None:
+            request_params["offset"] = params["offset"]
+
+        # Execute live API call
+        try:
+            response = httpx.get(
+                f"{self.base_url}/bot{bot_token}/getUpdates",
+                params=request_params,
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            result_data = response.json()
+
+            if not result_data.get("ok"):
+                return ConnectorResult.error_result(
+                    result_data.get("description", "Telegram API returned ok=false"),
+                    error_type="api_error",
+                    metadata={"response": result_data},
+                )
+
+            return ConnectorResult.success_result(
+                data=result_data.get("result", []),
+                metadata={
+                    "http_status": response.status_code,
+                    "live_execution": True,
+                    "update_count": len(result_data.get("result", [])),
+                },
+            )
+
+        except httpx.HTTPStatusError as e:
+            return ConnectorResult.error_result(
+                f"HTTP {e.response.status_code}: {e.response.text}",
+                error_type="http_error",
+                metadata={"status_code": e.response.status_code},
+            )
+        except httpx.TimeoutException:
+            return ConnectorResult.error_result(
+                "Request timed out",
+                error_type="timeout",
+            )
+        except httpx.RequestError as e:
+            return ConnectorResult.error_result(
+                f"Request failed: {str(e)}",
+                error_type="connection_error",
+            )
+        except Exception as e:
+            logger.error(f"Telegram get_updates failed: {e}")
+            return ConnectorResult.error_result(
+                str(e),
+                error_type=type(e).__name__,
+            )
 
     def _dry_run_impl(
         self,

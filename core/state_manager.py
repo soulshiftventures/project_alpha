@@ -1,7 +1,7 @@
 import json
 import os
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class StateManager:
@@ -66,7 +66,7 @@ class StateManager:
         for task in tasks:
             if task["task_id"] == task_id:
                 task.update(updates)
-                task["updated_at"] = datetime.utcnow().isoformat()
+                task["updated_at"] = datetime.now(timezone.utc).isoformat()
                 updated = True
                 break
 

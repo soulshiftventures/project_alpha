@@ -146,8 +146,7 @@ def main():
         print("⚠ No AI API key found. Using fallback mode.")
         print("  Set ANTHROPIC_API_KEY or OPENAI_API_KEY for full AI capabilities.\n")
 
-    print(f"Focus Area: {focus_area}")
-    print(f"Max Active Businesses: 5\n")
+    print(f"Focus Area: {focus_area}\n")
     print("-" * 70)
 
     research_engine = ResearchEngine()
@@ -158,7 +157,22 @@ def main():
     evaluation_engine = EvaluationEngine(max_retries=3)
     memory = Memory()
     lifecycle_manager = LifecycleManager()
-    portfolio_manager = PortfolioManager(max_active=5)
+
+    # Initialize capacity-aware portfolio manager (no hardcoded limits)
+    from core.capacity_manager import CapacityManager, CapacityDimension
+    from core.capacity_policies import CapacityPolicies
+    capacity_policies = CapacityPolicies()
+    capacity_manager = CapacityManager(capacity_policies=capacity_policies)
+
+    # Optional: Configure capacity limits (None = unlimited by default)
+    # Uncomment to enable limits:
+    # capacity_manager.set_limit(
+    #     dimension=CapacityDimension.BUSINESSES,
+    #     soft_limit=5,
+    #     hard_limit=10
+    # )
+
+    portfolio_manager = PortfolioManager(capacity_manager=capacity_manager)
 
     # Initialize workflow system
     workflow_orchestrator = WorkflowOrchestrator()
@@ -186,7 +200,9 @@ def main():
         print(f"{'='*70}\n")
 
         # PHASE 1: DISCOVERY
-        if portfolio_manager.can_add_business():
+        capacity_check = portfolio_manager.can_add_business()
+
+        if capacity_check["allowed"]:
             print("[DISCOVERY] Searching for new opportunities...")
             opportunities = research_engine.find_opportunities(focus_area)
 
@@ -198,13 +214,23 @@ def main():
                 business = lifecycle_manager.create_business(selected)
                 portfolio_manager.add_business(business)
 
+                # Show capacity warnings if any
+                if capacity_check["warnings"]:
+                    print(f"  ⚠ Capacity warnings:")
+                    for warning in capacity_check["warnings"]:
+                        print(f"    - {warning}")
+
                 memory.save_decision(
                     decision=f"Created business: {selected['idea']}",
                     context=f"Stage: DISCOVERED, Potential: {selected.get('potential', 'unknown')}",
                     outcome="pending"
                 )
         else:
-            print("[DISCOVERY] Portfolio at capacity (max 5 active businesses)")
+            print(f"[DISCOVERY] Portfolio capacity: {capacity_check['reason']}")
+            if capacity_check.get("recommendations"):
+                print("  Recommendations:")
+                for rec in capacity_check["recommendations"]:
+                    print(f"    - {rec}")
 
         # PHASE 2: PORTFOLIO MANAGEMENT
         active_businesses = portfolio_manager.get_active_businesses()

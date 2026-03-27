@@ -32,6 +32,7 @@ from core.integration_policies import (
 from core.credential_registry import get_credential_registry
 from core.secrets_manager import get_secrets_manager
 from config.settings import get_settings
+from core.connector_action_history import ConnectorActionHistory, get_connector_action_history
 
 
 logger = logging.getLogger(__name__)
@@ -109,9 +110,11 @@ class IntegrationSkill:
         self,
         connector_registry: Optional[ConnectorRegistry] = None,
         policy_engine: Optional[IntegrationPolicyEngine] = None,
+        connector_action_history: Optional[ConnectorActionHistory] = None,
     ):
         self._connector_registry = connector_registry or get_connector_registry()
         self._policy_engine = policy_engine or get_integration_policy_engine()
+        self._connector_action_history = connector_action_history
         self._settings = get_settings()
 
     def get_available_connectors(self) -> List[Dict[str, Any]]:
@@ -157,6 +160,12 @@ class IntegrationSkill:
         results = self._connector_registry.health_check_all()
         return {name: r.to_dict() for name, r in results.items()}
 
+    def _get_connector_action_history(self) -> ConnectorActionHistory:
+        """Get connector action history, initializing if needed."""
+        if self._connector_action_history is None:
+            self._connector_action_history = get_connector_action_history()
+        return self._connector_action_history
+
     def execute(self, request: IntegrationRequest) -> IntegrationResponse:
         """
         Execute an integration operation.
@@ -165,9 +174,13 @@ class IntegrationSkill:
         1. Validate connector exists
         2. Check policy
         3. Determine execution mode (dry_run vs live)
-        4. Execute via connector
-        5. Return response
+        4. Persist action as "requested"
+        5. Execute via connector
+        6. Persist execution result
+        7. Return response
         """
+        import time
+
         # Get connector
         connector = self._connector_registry.get(request.connector)
         if not connector:
@@ -188,6 +201,23 @@ class IntegrationSkill:
         )
 
         if not policy_decision.allowed:
+            # Record blocked action
+            history = self._get_connector_action_history()
+            execution_id = history.record_action_requested(
+                connector_name=request.connector,
+                action_name=request.operation,
+                mode="dry_run",
+                approval_state="blocked",
+                request_summary=f"Policy denied: {policy_decision.reason}",
+                metadata={"policy_decision": policy_decision.to_dict()},
+            )
+            if execution_id:
+                history.update_action_status(
+                    execution_id=execution_id,
+                    execution_status="blocked",
+                    error_summary=policy_decision.reason,
+                )
+
             return IntegrationResponse(
                 success=False,
                 connector=request.connector,
@@ -203,8 +233,18 @@ class IntegrationSkill:
         if dry_run is None:
             dry_run = self._settings.dry_run_default
 
-        # If approval required, force dry-run unless explicitly live
+        # If approval required, record as approval_pending
         if policy_decision.requires_approval and dry_run is None:
+            history = self._get_connector_action_history()
+            history.record_action_requested(
+                connector_name=request.connector,
+                action_name=request.operation,
+                mode="dry_run",
+                approval_state="pending",
+                request_summary="Requires approval before live execution",
+                metadata={"policy_decision": policy_decision.to_dict()},
+            )
+
             return IntegrationResponse(
                 success=True,
                 connector=request.connector,
@@ -215,15 +255,49 @@ class IntegrationSkill:
                 error="Operation requires approval before live execution",
             )
 
-        # Execute
+        # Record action as requested
         mode = ExecutionMode.DRY_RUN if dry_run else ExecutionMode.LIVE
+        history = self._get_connector_action_history()
+        execution_id = history.record_action_requested(
+            connector_name=request.connector,
+            action_name=request.operation,
+            mode="dry_run" if dry_run else "live",
+            approval_state="auto_allowed" if not policy_decision.requires_approval else "approved",
+            request_summary=f"Executing {request.operation} in {mode.value} mode",
+            metadata={
+                "policy_decision": policy_decision.to_dict(),
+                "request_params": request.params,
+            },
+        )
 
+        # Record execution start
+        start_time = time.time()
+        if execution_id:
+            history.record_action_executing(
+                execution_id=execution_id,
+                mode="dry_run" if dry_run else "live",
+            )
+
+        # Execute via connector
         result = connector.execute(
             operation=request.operation,
             params=request.params,
             dry_run=dry_run,
             request_id=request.request_id,
         )
+
+        # Calculate duration
+        duration = time.time() - start_time
+
+        # Record execution completion
+        if execution_id:
+            history.record_action_completed(
+                execution_id=execution_id,
+                success=result.success,
+                response_summary=str(result.data) if result.data else None,
+                error_summary=result.error,
+                duration_seconds=duration,
+            )
 
         # Record usage
         if result.success and not dry_run:

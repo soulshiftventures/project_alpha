@@ -95,7 +95,23 @@ class EventType(Enum):
     # System events
     SYSTEM_STARTUP = "system_startup"
     SYSTEM_SHUTDOWN = "system_shutdown"
+    SYSTEM_RECOVERY = "system_recovery"
     ERROR = "error"
+
+    # Cost and budget events
+    COST_ESTIMATED = "cost_estimated"
+    COST_RECORDED = "cost_recorded"
+    COST_ACTUAL_UPDATED = "cost_actual_updated"
+    BUDGET_WARNING = "budget_warning"
+    BUDGET_THRESHOLD_EXCEEDED = "budget_threshold_exceeded"
+    BUDGET_BLOCKED = "budget_blocked"
+    BUDGET_APPROVAL_REQUIRED = "budget_approval_required"
+    COST_POLICY_EVALUATED = "cost_policy_evaluated"
+
+    # Persistence events
+    STATE_PERSISTED = "state_persisted"
+    STATE_RECOVERED = "state_recovered"
+    PERSISTENCE_ERROR = "persistence_error"
 
 
 class EventSeverity(Enum):
@@ -1071,5 +1087,287 @@ class EventLogger:
                 "block_type": block_type,
                 "connector": connector,
                 "operation": operation
+            }
+        )
+
+    # Cost and budget logging methods
+
+    def log_cost_estimated(
+        self,
+        record_type: str,
+        record_id: str,
+        estimated_cost: float,
+        cost_class: str,
+        confidence: str,
+        connector: Optional[str] = None,
+        operation: Optional[str] = None,
+        business_id: Optional[str] = None
+    ) -> Event:
+        """Log cost estimation for an operation."""
+        return self.log(
+            event_type=EventType.COST_ESTIMATED,
+            message=f"Cost estimated: ${estimated_cost:.4f} ({cost_class})",
+            business_id=business_id,
+            details={
+                "record_type": record_type,
+                "record_id": record_id,
+                "estimated_cost": estimated_cost,
+                "cost_class": cost_class,
+                "confidence": confidence,
+                "connector": connector,
+                "operation": operation
+            }
+        )
+
+    def log_cost_recorded(
+        self,
+        cost_id: str,
+        record_type: str,
+        record_id: str,
+        amount: float,
+        is_actual: bool,
+        connector: Optional[str] = None,
+        business_id: Optional[str] = None
+    ) -> Event:
+        """Log cost record creation."""
+        cost_type = "actual" if is_actual else "estimated"
+        return self.log(
+            event_type=EventType.COST_RECORDED,
+            message=f"Cost recorded ({cost_type}): ${amount:.4f}",
+            business_id=business_id,
+            details={
+                "cost_id": cost_id,
+                "record_type": record_type,
+                "record_id": record_id,
+                "amount": amount,
+                "is_actual": is_actual,
+                "connector": connector
+            }
+        )
+
+    def log_cost_actual_updated(
+        self,
+        cost_id: str,
+        estimated_amount: float,
+        actual_amount: float,
+        variance: float,
+        connector: Optional[str] = None,
+        business_id: Optional[str] = None
+    ) -> Event:
+        """Log when actual cost is recorded and differs from estimate."""
+        severity = EventSeverity.WARNING if abs(variance) > 0.5 else EventSeverity.INFO
+        return self.log(
+            event_type=EventType.COST_ACTUAL_UPDATED,
+            message=f"Actual cost updated: ${actual_amount:.4f} (variance: {variance:+.2%})",
+            severity=severity,
+            business_id=business_id,
+            details={
+                "cost_id": cost_id,
+                "estimated_amount": estimated_amount,
+                "actual_amount": actual_amount,
+                "variance": variance,
+                "connector": connector
+            }
+        )
+
+    def log_budget_warning(
+        self,
+        scope: str,
+        scope_id: Optional[str],
+        current_spend: float,
+        budget_limit: float,
+        utilization: float,
+        warning_message: str
+    ) -> Event:
+        """Log budget warning when approaching limit."""
+        return self.log(
+            event_type=EventType.BUDGET_WARNING,
+            message=f"Budget warning ({scope}): {utilization:.1%} utilized",
+            severity=EventSeverity.WARNING,
+            details={
+                "scope": scope,
+                "scope_id": scope_id,
+                "current_spend": current_spend,
+                "budget_limit": budget_limit,
+                "utilization": utilization,
+                "warning_message": warning_message
+            }
+        )
+
+    def log_budget_threshold_exceeded(
+        self,
+        scope: str,
+        scope_id: Optional[str],
+        current_spend: float,
+        budget_limit: float,
+        threshold_type: str,
+        projected_cost: float
+    ) -> Event:
+        """Log when budget threshold is exceeded."""
+        return self.log(
+            event_type=EventType.BUDGET_THRESHOLD_EXCEEDED,
+            message=f"Budget threshold exceeded ({scope}): {threshold_type}",
+            severity=EventSeverity.WARNING,
+            details={
+                "scope": scope,
+                "scope_id": scope_id,
+                "current_spend": current_spend,
+                "budget_limit": budget_limit,
+                "threshold_type": threshold_type,
+                "projected_cost": projected_cost
+            }
+        )
+
+    def log_budget_blocked(
+        self,
+        scope: str,
+        scope_id: Optional[str],
+        projected_cost: float,
+        budget_limit: float,
+        current_spend: float,
+        reason: str,
+        connector: Optional[str] = None,
+        operation: Optional[str] = None
+    ) -> Event:
+        """Log when operation is blocked due to budget."""
+        return self.log(
+            event_type=EventType.BUDGET_BLOCKED,
+            message=f"Operation blocked by budget ({scope}): {reason}",
+            severity=EventSeverity.WARNING,
+            details={
+                "scope": scope,
+                "scope_id": scope_id,
+                "projected_cost": projected_cost,
+                "budget_limit": budget_limit,
+                "current_spend": current_spend,
+                "reason": reason,
+                "connector": connector,
+                "operation": operation
+            }
+        )
+
+    def log_budget_approval_required(
+        self,
+        scope: str,
+        scope_id: Optional[str],
+        projected_cost: float,
+        budget_remaining: float,
+        reason: str,
+        connector: Optional[str] = None,
+        operation: Optional[str] = None
+    ) -> Event:
+        """Log when operation requires approval due to budget."""
+        return self.log(
+            event_type=EventType.BUDGET_APPROVAL_REQUIRED,
+            message=f"Budget approval required ({scope}): {reason}",
+            details={
+                "scope": scope,
+                "scope_id": scope_id,
+                "projected_cost": projected_cost,
+                "budget_remaining": budget_remaining,
+                "reason": reason,
+                "connector": connector,
+                "operation": operation
+            }
+        )
+
+    def log_cost_policy_evaluated(
+        self,
+        connector: str,
+        operation: str,
+        estimated_cost: float,
+        cost_class: str,
+        outcome: str,
+        rule_id: Optional[str] = None,
+        requires_approval: bool = False,
+        business_id: Optional[str] = None
+    ) -> Event:
+        """Log cost policy evaluation result."""
+        severity = EventSeverity.WARNING if outcome in ["blocked", "requires_approval"] else EventSeverity.INFO
+        return self.log(
+            event_type=EventType.COST_POLICY_EVALUATED,
+            message=f"Cost policy evaluated: {outcome} for {connector}:{operation}",
+            severity=severity,
+            business_id=business_id,
+            details={
+                "connector": connector,
+                "operation": operation,
+                "estimated_cost": estimated_cost,
+                "cost_class": cost_class,
+                "outcome": outcome,
+                "rule_id": rule_id,
+                "requires_approval": requires_approval
+            }
+        )
+
+    # Persistence logging methods
+
+    def log_state_persisted(
+        self,
+        record_type: str,
+        record_id: str,
+        success: bool,
+        details: Optional[Dict[str, Any]] = None
+    ) -> Event:
+        """Log state persistence event."""
+        severity = EventSeverity.INFO if success else EventSeverity.WARNING
+        return self.log(
+            event_type=EventType.STATE_PERSISTED,
+            message=f"State persisted: {record_type}/{record_id} {'succeeded' if success else 'failed'}",
+            severity=severity,
+            details={
+                "record_type": record_type,
+                "record_id": record_id,
+                "success": success,
+                **(details or {})
+            }
+        )
+
+    def log_state_recovered(
+        self,
+        recovered_approvals: int,
+        recovered_jobs: int,
+        recovered_plans: int,
+        recovered_promotions: int,
+        recovered_costs: int = 0,
+        success: bool = True,
+        errors: Optional[List[str]] = None
+    ) -> Event:
+        """Log state recovery on startup."""
+        total_recovered = recovered_approvals + recovered_jobs + recovered_plans + recovered_promotions + recovered_costs
+        severity = EventSeverity.INFO if success else EventSeverity.WARNING
+        return self.log(
+            event_type=EventType.STATE_RECOVERED,
+            message=f"State recovered: {total_recovered} records",
+            severity=severity,
+            details={
+                "recovered_approvals": recovered_approvals,
+                "recovered_jobs": recovered_jobs,
+                "recovered_plans": recovered_plans,
+                "recovered_promotions": recovered_promotions,
+                "recovered_costs": recovered_costs,
+                "total_recovered": total_recovered,
+                "success": success,
+                "errors": errors or []
+            }
+        )
+
+    def log_persistence_error(
+        self,
+        operation: str,
+        record_type: str,
+        record_id: Optional[str],
+        error: str
+    ) -> Event:
+        """Log persistence error."""
+        return self.log(
+            event_type=EventType.PERSISTENCE_ERROR,
+            message=f"Persistence error ({operation}): {error}",
+            severity=EventSeverity.ERROR,
+            error=error,
+            details={
+                "operation": operation,
+                "record_type": record_type,
+                "record_id": record_id
             }
         )

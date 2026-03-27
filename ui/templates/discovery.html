@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Business Discovery - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Business Discovery</h1>
+    <p class="subtitle">Transform rough ideas into validated business opportunities</p>
+</div>
+
+<div class="discovery-intake-section">
+    <div class="card">
+        <h2>Submit New Idea or Opportunity</h2>
+        <form method="POST" action="{{ url_for('discovery_intake') }}" class="discovery-form">
+            <div class="form-group">
+                <label for="raw_text">Describe your idea, problem, opportunity, or curiosity:</label>
+                <textarea
+                    id="raw_text"
+                    name="raw_text"
+                    rows="6"
+                    placeholder="Examples:
+- 'I noticed small businesses struggle with X...'
+- 'What if we built a tool that helps people do Y?'
+- 'Growing interest in Z - could there be an opportunity?'
+- 'Problem: customers keep complaining about Q...'"
+                    required
+                ></textarea>
+                <p class="help-text">Be as rough or detailed as you like. The system will help structure it.</p>
+            </div>
+
+            <div class="form-group">
+                <label for="tags">Tags (optional, comma-separated):</label>
+                <input type="text" id="tags" name="tags" placeholder="e.g., saas, local-service, automation">
+            </div>
+
+            <button type="submit" class="btn btn-primary">Evaluate Opportunity</button>
+        </form>
+    </div>
+</div>
+
+<div class="opportunities-section">
+    <h2>Recent Opportunities</h2>
+
+    {% if opportunities %}
+    <div class="opportunities-grid">
+        {% for opp in opportunities %}
+        <div class="opportunity-card status-{{ opp.status }}">
+            <div class="opp-header">
+                <h3><a href="{{ url_for('opportunity_detail', opportunity_id=opp.opportunity_id) }}">{{ opp.hypothesis.title }}</a></h3>
+                <span class="badge status-badge-{{ opp.status }}">{{ opp.status }}</span>
+            </div>
+
+            <p class="opp-description">{{ opp.hypothesis.description[:150] }}{% if opp.hypothesis.description|length > 150 %}...{% endif %}</p>
+
+            <div class="opp-score-bar">
+                <div class="score-fill" style="width: {{ (opp.score.overall_score * 100)|int }}%"></div>
+                <span class="score-label">Score: {{ "%.1f"|format(opp.score.overall_score * 100) }}/100</span>
+            </div>
+
+            <div class="opp-recommendation">
+                <strong>Recommendation:</strong> {{ opp.recommendation.action.replace('_', ' ').title() }}
+            </div>
+
+            <div class="opp-meta">
+                <span class="meta-item">{{ opp.hypothesis.monetization_path.replace('_', ' ').title() }}</span>
+                <span class="meta-item">Updated: {{ opp.updated_at[:10] }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No opportunities yet. Submit your first idea above to get started.</p>
+    {% endif %}
+</div>
+
+<style>
+.discovery-intake-section {
+    margin-bottom: 3rem;
+}
+
+.discovery-form textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+
+.help-text {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #666;
+}
+
+.opportunities-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.opportunity-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: box-shadow 0.2s;
+}
+
+.opportunity-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.opp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.opp-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    flex: 1;
+}
+
+.opp-header h3 a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.opp-header h3 a:hover {
+    text-decoration: underline;
+}
+
+.status-badge-evaluated { background: #3b82f6; color: white; }
+.status-badge-pursue { background: #10b981; color: white; }
+.status-badge-validate { background: #f59e0b; color: white; }
+.status-badge-archived { background: #6b7280; color: white; }
+.status-badge-rejected { background: #ef4444; color: white; }
+.status-badge-draft { background: #8b5cf6; color: white; }
+
+.opp-description {
+    color: #555;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.opp-score-bar {
+    position: relative;
+    height: 24px;
+    background: #f3f4f6;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.score-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
+    transition: width 0.3s;
+}
+
+.score-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.opp-recommendation {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.opp-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.meta-item {
+    padding: 0.25rem 0.5rem;
+    background: #f3f4f6;
+    border-radius: 3px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: #6b7280;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+</style>
+{% endblock %}

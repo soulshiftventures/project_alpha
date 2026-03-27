@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Connector Action Detail - Project Alpha{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>Connector Action Detail</h2>
+                    <p class="text-muted mb-0">
+                        <span class="badge bg-secondary">{{ action.connector_name }}</span>
+                        <span class="mx-2">\u2022</span>
+                        <strong>{{ action.action_name }}</strong>
+                    </p>
+                </div>
+                <div>
+                    <a href="{{ url_for('connector_actions_list') }}" class="btn btn-outline-secondary">Back to List</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Info -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Execution Details</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th width="200">Execution ID</th>
+                                <td><code>{{ action.execution_id }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>Connector</th>
+                                <td><span class="badge bg-secondary">{{ action.connector_name }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Action</th>
+                                <td><strong>{{ action.action_name }}</strong></td>
+                            </tr>
+                            <tr>
+                                <th>Execution Mode</th>
+                                <td>
+                                    {% if action.mode == 'live' %}
+                                        <span class="badge bg-warning">LIVE EXECUTION</span>
+                                    {% else %}
+                                        <span class="badge bg-info">DRY-RUN</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>
+                                    {% if action.success %}
+                                        <span class="badge bg-success">\u2713 Success</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">\u2717 Failed</span>
+                                    {% endif %}
+                                    {% if action.execution_status %}
+                                        <span class="badge bg-light text-dark">{{ action.execution_status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Timestamp</th>
+                                <td>{{ action.timestamp }}</td>
+                            </tr>
+                            <tr>
+                                <th>Duration</th>
+                                <td>
+                                    {% if action.duration_seconds %}
+                                        {{ "%.0f"|format(action.duration_seconds * 1000) }} ms
+                                    {% else %}
+                                        <span class="text-muted">Not recorded</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost & Approval -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Cost Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>Cost Class</th>
+                                <td>
+                                    {% if action.cost_class %}
+                                        <span class="badge bg-light text-dark">{{ action.cost_class }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Estimated</th>
+                                <td>
+                                    {% if action.estimated_cost %}
+                                        ${{ "%.4f"|format(action.estimated_cost) }}
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Actual</th>
+                                <td>
+                                    {% if action.actual_cost %}
+                                        ${{ "%.4f"|format(action.actual_cost) }}
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Approval Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th>State</th>
+                                <td>
+                                    {% if action.approval_state %}
+                                        <span class="badge bg-info">{{ action.approval_state }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Not required</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% if action.approval_id %}
+                            <tr>
+                                <th>Approval ID</th>
+                                <td><code><a href="{{ url_for('approval_detail', record_id=action.approval_id) }}">{{ action.approval_id[:12] }}...</a></code></td>
+                            </tr>
+                            {% endif %}
+                            {% if action.operator_decision_ref %}
+                            <tr>
+                                <th>Decision Ref</th>
+                                <td><small>{{ action.operator_decision_ref }}</small></td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Summary -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Request Summary</h5>
+                </div>
+                <div class="card-body">
+                    {% if action.request_summary %}
+                        <pre class="bg-light p-3 border rounded">{{ action.request_summary }}</pre>
+                    {% else %}
+                        <p class="text-muted">No request summary available</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Summary -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Response Summary</h5>
+                </div>
+                <div class="card-body">
+                    {% if action.response_summary %}
+                        <pre class="bg-light p-3 border rounded">{{ action.response_summary }}</pre>
+                    {% elif action.success %}
+                        <p class="text-muted">No response summary available</p>
+                    {% else %}
+                        <p class="text-danger">Action failed - see error summary below</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Summary -->
+    {% if not action.success %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">\u2717 Error Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if action.error_summary %}
+                        <pre class="bg-light p-3 border rounded text-danger">{{ action.error_summary }}</pre>
+                    {% elif action.error %}
+                        <pre class="bg-light p-3 border rounded text-danger">{{ action.error }}</pre>
+                    {% else %}
+                        <p class="text-muted">No error details available</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Related Entities -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Related Entities</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th width="150">Job</th>
+                                <td>
+                                    {% if action.job_id %}
+                                        <a href="{{ url_for('job_detail', job_id=action.job_id) }}">{{ action.job_id }}</a>
+                                    {% else %}
+                                        <span class="text-muted">Not linked</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Plan</th>
+                                <td>
+                                    {% if action.plan_id %}
+                                        <a href="{{ url_for('plan_detail', plan_id=action.plan_id) }}">{{ action.plan_id }}</a>
+                                    {% else %}
+                                        <span class="text-muted">Not linked</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Opportunity</th>
+                                <td>
+                                    {% if action.opportunity_id %}
+                                        <a href="{{ url_for('opportunity_detail', opportunity_id=action.opportunity_id) }}">{{ action.opportunity_id }}</a>
+                                    {% else %}
+                                        <span class="text-muted">Not linked</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

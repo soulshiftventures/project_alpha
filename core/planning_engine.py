@@ -5,7 +5,7 @@ Uses AI to generate detailed task plans from opportunities
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict
 from core.ai_client import AIClient
 
@@ -80,7 +80,7 @@ Return ONLY valid JSON, no additional text."""
     def _convert_to_tasks(self, task_definitions: List[Dict], opportunity: Dict) -> List[Dict]:
         """Convert task definitions to full task schema."""
         tasks = []
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         for idx, task_def in enumerate(task_definitions):
             if not isinstance(task_def, dict):
@@ -125,7 +125,7 @@ Return ONLY valid JSON, no additional text."""
     def _generate_fallback_plan(self, opportunity: Dict) -> List[Dict]:
         """Generate fallback plan if AI fails."""
         idea = opportunity.get("idea", "Unknown")
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         return [
             {
@@ -338,7 +338,7 @@ Return as JSON array with same structure."""
     def _generate_stage_fallback(self, stage: str, opportunity: Dict) -> List[Dict]:
         """Generate fallback tasks for a specific stage."""
         idea = opportunity.get("idea", "Unknown")
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         tasks_by_stage = {
             "VALIDATING": [

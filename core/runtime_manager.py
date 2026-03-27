@@ -37,6 +37,9 @@ from .worker_registry import (
     WorkerType,
     get_worker_registry,
 )
+from .cost_model import CostEstimate, estimate_plan_cost
+from .cost_tracker import CostTracker, CostMetadata, get_cost_tracker
+from .budget_manager import BudgetManager, get_budget_manager
 
 
 class BackendSelectionStrategy(Enum):
@@ -71,6 +74,12 @@ class RuntimeResult:
     error: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    # Cost tracking fields
+    estimated_cost: float = 0.0
+    actual_cost: Optional[float] = None
+    cost_id: Optional[str] = None
+    cost_class: Optional[str] = None
+
     @property
     def step_count(self) -> int:
         """Get total step count."""
@@ -85,6 +94,13 @@ class RuntimeResult:
             return self.job_result.completed_steps
         return 0
 
+    @property
+    def cost_variance(self) -> Optional[float]:
+        """Get cost variance if actual is known."""
+        if self.actual_cost is not None and self.estimated_cost > 0:
+            return (self.actual_cost - self.estimated_cost) / self.estimated_cost
+        return None
+
 
 class RuntimeManager:
     """
@@ -98,6 +114,8 @@ class RuntimeManager:
         config: Optional[RuntimeConfig] = None,
         dispatcher: Optional[JobDispatcher] = None,
         worker_registry: Optional[WorkerRegistry] = None,
+        cost_tracker: Optional[CostTracker] = None,
+        budget_manager: Optional[BudgetManager] = None,
     ):
         """
         Initialize the runtime manager.
@@ -106,18 +124,35 @@ class RuntimeManager:
             config: Runtime configuration.
             dispatcher: Job dispatcher to use.
             worker_registry: Worker registry to use.
+            cost_tracker: Cost tracker for cost recording.
+            budget_manager: Budget manager for spend tracking.
         """
         self._config = config or RuntimeConfig()
         self._dispatcher = dispatcher or get_job_dispatcher()
         self._worker_registry = worker_registry or get_worker_registry()
+        self._cost_tracker = cost_tracker
+        self._budget_manager = budget_manager
         self._backends: Dict[BackendType, ExecutionBackend] = {}
         self._event_handlers: Dict[str, List[Callable]] = {
             "on_backend_selected": [],
             "on_execution_started": [],
             "on_execution_completed": [],
             "on_execution_failed": [],
+            "on_cost_recorded": [],
         }
         self._initialized = False
+
+    def _get_cost_tracker(self) -> CostTracker:
+        """Get cost tracker, initializing if needed."""
+        if self._cost_tracker is None:
+            self._cost_tracker = get_cost_tracker()
+        return self._cost_tracker
+
+    def _get_budget_manager(self) -> BudgetManager:
+        """Get budget manager, initializing if needed."""
+        if self._budget_manager is None:
+            self._budget_manager = get_budget_manager()
+        return self._budget_manager
 
     def initialize(self) -> bool:
         """
@@ -248,6 +283,8 @@ class RuntimeManager:
         plan: ExecutionPlan,
         backend_type: Optional[BackendType] = None,
         options: Optional[DispatchOptions] = None,
+        business_id: Optional[str] = None,
+        track_costs: bool = True,
     ) -> RuntimeResult:
         """
         Execute an execution plan.
@@ -256,6 +293,8 @@ class RuntimeManager:
             plan: ExecutionPlan to execute.
             backend_type: Specific backend to use (auto-selects if None).
             options: Dispatch options.
+            business_id: Business ID for cost tracking.
+            track_costs: Whether to track costs for this execution.
 
         Returns:
             RuntimeResult with execution outcome.
@@ -275,6 +314,26 @@ class RuntimeManager:
                 plan_id=plan.plan_id,
                 backend_type=selected_backend,
                 error=f"Backend not available: {selected_backend.value}",
+            )
+
+        # Estimate cost for the plan
+        cost_estimate = None
+        cost_metadata = None
+        if track_costs:
+            cost_estimate = estimate_plan_cost(
+                [{"connector": s.domain.value if hasattr(s.domain, 'value') else str(s.domain), "operation": s.handler_method or s.description} for s in plan.steps],
+                selected_backend.value,
+            )
+
+            # Record estimated cost
+            cost_tracker = self._get_cost_tracker()
+            cost_metadata = cost_tracker.record_estimated_cost(
+                record_type="plan",
+                record_id=plan.plan_id,
+                estimate=cost_estimate,
+                connector=None,
+                operation=None,
+                business_id=business_id,
             )
 
         # Build dispatch options
@@ -312,7 +371,23 @@ class RuntimeManager:
                 metadata={
                     "backend_is_scaffold": self._backends[selected_backend].get_capabilities().is_scaffold,
                 },
+                estimated_cost=cost_estimate.amount if cost_estimate else 0.0,
+                cost_class=cost_estimate.cost_class.value if cost_estimate else None,
+                cost_id=cost_metadata.cost_id if cost_metadata else None,
             )
+
+            # Record spend if successful
+            if success and track_costs and cost_estimate:
+                from .budget_manager import BudgetScope
+                budget_manager = self._get_budget_manager()
+                budget_manager.record_spend(
+                    amount=cost_estimate.amount,
+                    is_actual=False,  # Still estimated until confirmed
+                    scope=BudgetScope.MONTHLY,
+                    scope_id=business_id or "default",
+                    connector=None,
+                )
+                self._fire_event("on_cost_recorded", result, cost_metadata)
 
             # Fire completion event
             if success:
@@ -332,10 +407,34 @@ class RuntimeManager:
                 backend_type=selected_backend,
                 execution_time_seconds=execution_time,
                 error=str(e),
+                estimated_cost=cost_estimate.amount if cost_estimate else 0.0,
+                cost_class=cost_estimate.cost_class.value if cost_estimate else None,
+                cost_id=cost_metadata.cost_id if cost_metadata else None,
             )
 
             self._fire_event("on_execution_failed", result)
             return result
+
+    def record_actual_cost(
+        self,
+        cost_id: str,
+        actual_amount: float,
+        notes: str = "",
+    ) -> bool:
+        """
+        Record actual cost after execution completes.
+
+        Args:
+            cost_id: Cost record ID from execution.
+            actual_amount: Actual cost incurred.
+            notes: Optional notes.
+
+        Returns:
+            True if recorded successfully.
+        """
+        cost_tracker = self._get_cost_tracker()
+        updated = cost_tracker.record_actual_cost(cost_id, actual_amount, notes)
+        return updated is not None
 
     def get_backend_capabilities(
         self,
@@ -404,6 +503,22 @@ class RuntimeManager:
         dispatcher_stats = self._dispatcher.get_stats()
         worker_stats = self._worker_registry.get_stats() if self._worker_registry.is_loaded else {}
 
+        # Get cost stats if tracker is available
+        cost_stats = {}
+        try:
+            cost_tracker = self._get_cost_tracker()
+            cost_stats = cost_tracker.get_stats()
+        except Exception:
+            pass
+
+        # Get budget stats if manager is available
+        budget_stats = {}
+        try:
+            budget_manager = self._get_budget_manager()
+            budget_stats = budget_manager.get_summary()
+        except Exception:
+            pass
+
         return {
             "initialized": self._initialized,
             "config": {
@@ -415,6 +530,8 @@ class RuntimeManager:
             "backends": self.list_available_backends(),
             "dispatcher": dispatcher_stats,
             "workers": worker_stats,
+            "costs": cost_stats,
+            "budgets": budget_stats,
         }
 
     def cleanup(self) -> None:
@@ -439,6 +556,8 @@ def execute_plan(
     plan: ExecutionPlan,
     backend_type: Optional[BackendType] = None,
     options: Optional[DispatchOptions] = None,
+    business_id: Optional[str] = None,
+    track_costs: bool = True,
 ) -> RuntimeResult:
     """
     Execute an execution plan.
@@ -447,6 +566,8 @@ def execute_plan(
         plan: ExecutionPlan to execute.
         backend_type: Specific backend to use (auto-selects if None).
         options: Dispatch options.
+        business_id: Business ID for cost tracking.
+        track_costs: Whether to track costs.
 
     Returns:
         RuntimeResult with execution outcome.
@@ -454,7 +575,7 @@ def execute_plan(
     manager = get_runtime_manager()
     if not manager.is_initialized:
         manager.initialize()
-    return manager.execute(plan, backend_type, options)
+    return manager.execute(plan, backend_type, options, business_id, track_costs)
 
 
 def get_available_backends() -> List[Dict[str, Any]]:

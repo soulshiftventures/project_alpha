@@ -1,13 +1,20 @@
 """
 Portfolio Workflows for Project Alpha
-Manages up to 5 concurrent businesses with intelligent task prioritization,
+Manages concurrent businesses with configurable capacity, intelligent task prioritization,
 load balancing, and portfolio-level health monitoring.
 """
 
 import heapq
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+
+from core.capacity_manager import (
+    CapacityManager,
+    CapacityCheckContext,
+    CapacityDimension,
+    CapacityDecision
+)
 
 
 class PortfolioWorkflows:
@@ -15,7 +22,7 @@ class PortfolioWorkflows:
     Portfolio-level workflow management for multiple concurrent businesses.
 
     Features:
-    - Manage up to 5 concurrent businesses
+    - Configurable capacity management (soft/hard limits or unlimited)
     - Rank and prioritize tasks across portfolio
     - Schedule stage transitions automatically
     - Portfolio-level task generation and execution
@@ -23,14 +30,35 @@ class PortfolioWorkflows:
     - Portfolio health monitoring with early warnings
     """
 
-    def __init__(self, max_concurrent_businesses: int = 5):
+    def __init__(
+        self,
+        max_concurrent_businesses: Optional[int] = None,
+        capacity_manager: Optional[CapacityManager] = None
+    ):
         """
         Initialize portfolio workflows.
 
         Args:
-            max_concurrent_businesses: Maximum number of businesses to manage (default: 5)
+            max_concurrent_businesses: Deprecated. Use capacity_manager instead.
+                                      If provided, sets soft limit.
+            capacity_manager: CapacityManager instance for capacity enforcement
         """
-        self.max_concurrent_businesses = max_concurrent_businesses
+        # Initialize or use provided capacity manager
+        if capacity_manager:
+            self.capacity_manager = capacity_manager
+        else:
+            from core.capacity_policies import CapacityPolicies
+            policies = CapacityPolicies()
+            self.capacity_manager = CapacityManager(capacity_policies=policies)
+
+        # Handle legacy max_concurrent_businesses parameter
+        if max_concurrent_businesses is not None:
+            self.capacity_manager.set_limit(
+                dimension=CapacityDimension.BUSINESSES,
+                soft_limit=max_concurrent_businesses,
+                hard_limit=None,
+                description=f"Legacy max_concurrent_businesses limit: {max_concurrent_businesses}"
+            )
         self.portfolio = {}  # business_id -> business_dict
         self.task_queue = []  # Priority queue: (priority_score, timestamp, task)
         self.execution_history = []
@@ -39,7 +67,7 @@ class PortfolioWorkflows:
 
     def add_business(self, business: Dict) -> Dict:
         """
-        Add a business to the portfolio.
+        Add a business to the portfolio with capacity checking.
 
         Args:
             business: Business dictionary
@@ -47,13 +75,36 @@ class PortfolioWorkflows:
         Returns:
             Result dictionary with status
         """
-        if len(self.portfolio) >= self.max_concurrent_businesses:
+        # Check capacity before adding
+        context = CapacityCheckContext(
+            dimension=CapacityDimension.BUSINESSES,
+            current_count=len(self.portfolio),
+            requested_increment=1,
+            business_id=business.get("id"),
+            estimated_cost=business.get("opportunity", {}).get("projected_capital", 0.0)
+        )
+
+        capacity_result = self.capacity_manager.check_capacity(context)
+
+        # Block if capacity decision is BLOCKED
+        if capacity_result.decision == CapacityDecision.BLOCKED:
             return {
                 "status": "rejected",
-                "reason": "portfolio_full",
+                "reason": "capacity_blocked",
                 "current_count": len(self.portfolio),
-                "max_allowed": self.max_concurrent_businesses,
-                "suggestion": "Wait for a business to complete or terminate one"
+                "capacity_reason": capacity_result.reason,
+                "warnings": capacity_result.warnings,
+                "recommendations": capacity_result.recommendations
+            }
+
+        # Require approval if capacity decision is REQUIRES_APPROVAL
+        if capacity_result.decision == CapacityDecision.REQUIRES_APPROVAL:
+            return {
+                "status": "requires_approval",
+                "reason": "capacity_approval_required",
+                "current_count": len(self.portfolio),
+                "capacity_reason": capacity_result.reason,
+                "recommendations": capacity_result.recommendations
             }
 
         business_id = business["id"]
@@ -67,10 +118,11 @@ class PortfolioWorkflows:
 
         # Initialize portfolio-specific metadata
         business["portfolio_metadata"] = {
-            "added_at": datetime.utcnow().isoformat(),
+            "added_at": datetime.now(timezone.utc).isoformat(),
             "priority_score": self._calculate_priority_score(business),
             "resource_allocation": 1.0 / (len(self.portfolio) + 1),  # Equal allocation initially
-            "last_update": datetime.utcnow().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat(),
+            "capacity_warnings": capacity_result.warnings if capacity_result.decision == CapacityDecision.WARNING else []
         }
 
         self.portfolio[business_id] = business
@@ -83,7 +135,15 @@ class PortfolioWorkflows:
             "business_id": business_id,
             "portfolio_size": len(self.portfolio),
             "priority_score": business["portfolio_metadata"]["priority_score"],
-            "resource_allocation": business["portfolio_metadata"]["resource_allocation"]
+            "resource_allocation": business["portfolio_metadata"]["resource_allocation"],
+            "capacity_warnings": business["portfolio_metadata"]["capacity_warnings"],
+            "capacity_status": {
+                "decision": capacity_result.decision.value,
+                "current_count": capacity_result.current_count,
+                "projected_count": capacity_result.projected_count,
+                "soft_limit": capacity_result.soft_limit,
+                "hard_limit": capacity_result.hard_limit
+            }
         }
 
     def remove_business(self, business_id: str) -> Dict:
@@ -131,7 +191,7 @@ class PortfolioWorkflows:
             Portfolio management result
         """
         result = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "portfolio_size": len(businesses),
             "businesses_processed": 0,
             "total_tasks_executed": 0,
@@ -289,7 +349,7 @@ class PortfolioWorkflows:
         result = {
             "business_id": business["id"],
             "business_stage": business["stage"],
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "tasks_total": len(tasks),
             "tasks_completed": 0,
             "tasks_failed": 0,
@@ -311,7 +371,7 @@ class PortfolioWorkflows:
             else:
                 result["tasks_failed"] += 1
 
-        result["completed_at"] = datetime.utcnow().isoformat()
+        result["completed_at"] = datetime.now(timezone.utc).isoformat()
         result["success_rate"] = result["tasks_completed"] / max(result["tasks_total"], 1)
 
         return result
@@ -481,11 +541,11 @@ class PortfolioWorkflows:
         for business in self.portfolio.values():
             priority_score = business.get("portfolio_metadata", {}).get("priority_score", 0.5)
             business["portfolio_metadata"]["resource_allocation"] = priority_score / max(total_priority, 0.01)
-            business["portfolio_metadata"]["last_update"] = datetime.utcnow().isoformat()
+            business["portfolio_metadata"]["last_update"] = datetime.now(timezone.utc).isoformat()
 
     def get_portfolio_status(self) -> Dict:
         """
-        Get current portfolio status.
+        Get current portfolio status with capacity information.
 
         Returns:
             Portfolio status dictionary
@@ -499,18 +559,30 @@ class PortfolioWorkflows:
 
         avg_priority = total_priority / max(len(self.portfolio), 1)
 
+        # Get capacity status
+        capacity_status = self.capacity_manager.get_capacity_status()
+        business_capacity = capacity_status["dimensions"].get("businesses", {})
+
         return {
             "portfolio_size": len(self.portfolio),
-            "max_capacity": self.max_concurrent_businesses,
-            "utilization": len(self.portfolio) / self.max_concurrent_businesses,
+            "capacity": {
+                "current_count": business_capacity.get("current_count", len(self.portfolio)),
+                "soft_limit": business_capacity.get("soft_limit"),
+                "hard_limit": business_capacity.get("hard_limit"),
+                "utilization": business_capacity.get("utilization", 0.0),
+                "mode": business_capacity.get("mode", "unlimited")
+            },
             "stage_distribution": dict(stage_distribution),
             "average_priority": round(avg_priority, 2),
+            "warnings": capacity_status.get("warnings", []),
+            "bottlenecks": capacity_status.get("bottlenecks", []),
             "businesses": [
                 {
                     "id": b["id"],
                     "stage": b["stage"],
                     "priority": b.get("portfolio_metadata", {}).get("priority_score", 0.5),
-                    "resource_allocation": b.get("portfolio_metadata", {}).get("resource_allocation", 0.0)
+                    "resource_allocation": b.get("portfolio_metadata", {}).get("resource_allocation", 0.0),
+                    "capacity_warnings": b.get("portfolio_metadata", {}).get("capacity_warnings", [])
                 }
                 for b in self.portfolio.values()
             ]
@@ -657,5 +729,5 @@ class PortfolioHealthMonitor:
             },
             "warnings": warnings,
             "recommendations": recommendations,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict
 
 
@@ -20,7 +20,7 @@ class TaskGenerator:
             List of structured task dictionaries
         """
         tasks = []
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         task_definitions = self._decompose_goal(goal)
 

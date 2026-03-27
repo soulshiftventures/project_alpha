@@ -5,7 +5,7 @@ Pre-execution validation system with 5-check safety framework
 
 import os
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 
@@ -36,7 +36,7 @@ class WorkflowValidator:
 
         # Initialize Zep memory integration if available
         self.zep_available = self._check_zep_available()
-        self.zep_session_id = f"validator_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        self.zep_session_id = f"validator_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
     def _check_zep_available(self) -> bool:
         """Check if Zep memory is available."""
@@ -70,11 +70,11 @@ class WorkflowValidator:
             - errors: list (critical errors)
             - recommendation: str (proceed/abort/review)
         """
-        validation_id = f"val_{business['id']}_{stage}_{datetime.utcnow().isoformat()}"
+        validation_id = f"val_{business['id']}_{stage}_{datetime.now(timezone.utc).isoformat()}"
 
         result = {
             "validation_id": validation_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "business_id": business["id"],
             "business_idea": business["opportunity"]["idea"][:50],
             "stage": stage,

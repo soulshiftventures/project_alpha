@@ -25,6 +25,15 @@ from core.approval_manager import (
     ApprovalPolicy,
 )
 from core.event_logger import EventLogger, EventType, EventSeverity
+from core.cost_model import CostEstimate, CostClass, get_connector_cost_estimate, estimate_plan_cost
+from core.cost_policies import (
+    CostPolicyEngine,
+    CostPolicyResult,
+    CostPolicyOutcome,
+    get_cost_policy_engine,
+)
+from core.budget_manager import BudgetManager, BudgetCheckResult, get_budget_manager
+from core.connector_action_history import ConnectorActionHistory, get_connector_action_history
 
 
 logger = logging.getLogger(__name__)
@@ -91,6 +100,14 @@ class WorkflowItemContext:
     safe_params: Dict[str, Any] = field(default_factory=dict)
     policy_decisions: Dict[str, Any] = field(default_factory=dict)
 
+    # Cost governance fields
+    estimated_cost: float = 0.0
+    cost_class: Optional[str] = None
+    cost_confidence: Optional[str] = None
+    budget_remaining: Optional[float] = None
+    cost_policy_outcome: Optional[str] = None
+    cost_approval_reason: Optional[str] = None
+
     # Execution mode
     current_mode: str = "dry_run"  # dry_run | pending_live | live
     target_mode: str = "dry_run"
@@ -126,6 +143,12 @@ class WorkflowItemContext:
             "specialized_agents": self.specialized_agents,
             "safe_params": self.safe_params,
             "policy_decisions": self.policy_decisions,
+            "estimated_cost": self.estimated_cost,
+            "cost_class": self.cost_class,
+            "cost_confidence": self.cost_confidence,
+            "budget_remaining": self.budget_remaining,
+            "cost_policy_outcome": self.cost_policy_outcome,
+            "cost_approval_reason": self.cost_approval_reason,
             "current_mode": self.current_mode,
             "target_mode": self.target_mode,
             "created_at": self.created_at,
@@ -176,17 +199,44 @@ class ApprovalWorkflow:
         self,
         approval_manager: Optional[ApprovalManager] = None,
         event_logger: Optional[EventLogger] = None,
+        cost_policy_engine: Optional[CostPolicyEngine] = None,
+        budget_manager: Optional[BudgetManager] = None,
+        connector_action_history: Optional[ConnectorActionHistory] = None,
     ):
         """Initialize the approval workflow."""
         self._approval_manager = approval_manager or ApprovalManager()
         self._event_logger = event_logger or EventLogger()
+        self._cost_policy_engine = cost_policy_engine
+        self._budget_manager = budget_manager
+        self._connector_action_history = connector_action_history
 
         # Track workflow items (in-memory for now)
         self._items: Dict[str, WorkflowItemContext] = {}
 
+        # Map workflow_item_id to connector_execution_id
+        self._item_to_execution: Dict[str, str] = {}
+
         # Execution callbacks (registered by other modules)
         self._on_approved_callbacks: List[Callable[[WorkflowItemContext], None]] = []
         self._on_denied_callbacks: List[Callable[[WorkflowItemContext], None]] = []
+
+    def _get_cost_policy_engine(self) -> CostPolicyEngine:
+        """Get cost policy engine, initializing if needed."""
+        if self._cost_policy_engine is None:
+            self._cost_policy_engine = get_cost_policy_engine()
+        return self._cost_policy_engine
+
+    def _get_budget_manager(self) -> BudgetManager:
+        """Get budget manager, initializing if needed."""
+        if self._budget_manager is None:
+            self._budget_manager = get_budget_manager()
+        return self._budget_manager
+
+    def _get_connector_action_history(self) -> ConnectorActionHistory:
+        """Get connector action history, initializing if needed."""
+        if self._connector_action_history is None:
+            self._connector_action_history = get_connector_action_history()
+        return self._connector_action_history
 
     def register_approval_callback(
         self,
@@ -268,6 +318,22 @@ class ApprovalWorkflow:
 
         self._items[item_id] = item
 
+        # Persist connector action if this is a connector action workflow item
+        if item_type == WorkflowItemType.CONNECTOR_ACTION and connector_name and operation:
+            history = self._get_connector_action_history()
+            execution_id = history.record_action_requested(
+                connector_name=connector_name,
+                action_name=operation,
+                mode=target_mode,
+                approval_state="pending",
+                request_summary=description,
+                job_id=job_id,
+                plan_id=plan_id,
+                metadata=safe_params or {},
+            )
+            if execution_id:
+                self._item_to_execution[item_id] = execution_id
+
         # Log event
         self._event_logger.log(
             event_type=EventType.APPROVAL_REQUESTED,
@@ -283,6 +349,202 @@ class ApprovalWorkflow:
         )
 
         return item
+
+    def create_cost_aware_workflow_item(
+        self,
+        item_type: WorkflowItemType,
+        title: str,
+        description: str,
+        cost_estimate: CostEstimate,
+        requester: str = "system",
+        risk_level: str = "medium",
+        requires_live_mode: bool = False,
+        plan_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        connector_name: Optional[str] = None,
+        operation: Optional[str] = None,
+        business_id: Optional[str] = None,
+        skills: Optional[List[str]] = None,
+        commands: Optional[List[str]] = None,
+        specialized_agents: Optional[List[str]] = None,
+        safe_params: Optional[Dict[str, Any]] = None,
+        target_mode: str = "dry_run",
+    ) -> WorkflowItemContext:
+        """
+        Create a workflow item with cost governance evaluation.
+
+        Evaluates cost policies and budget before creating the item.
+        If cost policy requires approval, automatically sets requires approval.
+
+        Args:
+            item_type: Type of item
+            title: Display title
+            description: Description for operator
+            cost_estimate: Estimated cost for this action
+            requester: Who requested the action
+            risk_level: Risk classification
+            requires_live_mode: Whether this needs live mode
+            plan_id: Related execution plan ID
+            job_id: Related job ID
+            connector_name: Related connector
+            operation: Specific operation
+            business_id: Business context for budget check
+            skills: Related skills
+            commands: Related commands
+            specialized_agents: Related agents
+            safe_params: Safe-to-display parameters (no secrets)
+            target_mode: Intended execution mode
+
+        Returns:
+            WorkflowItemContext with cost policy evaluation
+        """
+        # Evaluate cost policy
+        cost_engine = self._get_cost_policy_engine()
+        cost_result = cost_engine.evaluate(
+            estimate=cost_estimate,
+            connector=connector_name,
+            operation=operation,
+            business_id=business_id,
+        )
+
+        # Determine if approval is required due to cost
+        cost_requires_approval = cost_result.outcome == CostPolicyOutcome.REQUIRES_APPROVAL
+        cost_blocked = cost_result.outcome == CostPolicyOutcome.BLOCKED
+
+        # Build policy decisions dict
+        policy_decisions = safe_params.get("policy_decisions", {}) if safe_params else {}
+        policy_decisions["cost_policy"] = cost_result.to_dict()
+
+        # Log cost policy evaluation
+        self._event_logger.log_cost_policy_evaluated(
+            connector=connector_name or "unknown",
+            operation=operation or "unknown",
+            estimated_cost=cost_estimate.amount,
+            cost_class=cost_estimate.cost_class.value,
+            outcome=cost_result.outcome.value,
+            rule_id=cost_result.rule_id,
+            requires_approval=cost_requires_approval,
+            business_id=business_id,
+        )
+
+        # Get budget info for display
+        budget_manager = self._get_budget_manager()
+        budget_remaining = None
+        if cost_result.budget_check:
+            budget_remaining = cost_result.budget_check.remaining
+
+        # Create the workflow item
+        item_id = f"wfi_{_utc_now().strftime('%Y%m%d%H%M%S%f')}"
+
+        item = WorkflowItemContext(
+            item_id=item_id,
+            item_type=item_type,
+            status=WorkflowItemStatus.PENDING_APPROVAL,
+            title=title,
+            description=description,
+            requester=requester,
+            risk_level=risk_level,
+            requires_live_mode=requires_live_mode,
+            plan_id=plan_id,
+            job_id=job_id,
+            connector_name=connector_name,
+            operation=operation,
+            skills=skills or [],
+            commands=commands or [],
+            specialized_agents=specialized_agents or [],
+            safe_params=safe_params or {},
+            policy_decisions=policy_decisions,
+            estimated_cost=cost_estimate.amount,
+            cost_class=cost_estimate.cost_class.value,
+            cost_confidence=cost_estimate.confidence.value if cost_estimate.confidence else None,
+            budget_remaining=budget_remaining,
+            cost_policy_outcome=cost_result.outcome.value,
+            cost_approval_reason=cost_result.approval_reason if cost_requires_approval else None,
+            current_mode="dry_run",
+            target_mode=target_mode,
+        )
+
+        # If blocked by cost, mark as denied immediately
+        if cost_blocked:
+            item.status = WorkflowItemStatus.DENIED
+            item.denial_rationale = cost_result.reason
+
+            self._event_logger.log_budget_blocked(
+                scope="action",
+                scope_id=business_id,
+                projected_cost=cost_estimate.amount,
+                budget_limit=cost_result.budget_check.limit if cost_result.budget_check else 0,
+                current_spend=cost_result.budget_check.current_spend if cost_result.budget_check else 0,
+                reason=cost_result.reason,
+                connector=connector_name,
+                operation=operation,
+            )
+
+        self._items[item_id] = item
+
+        # Log event with cost info
+        self._event_logger.log(
+            event_type=EventType.APPROVAL_REQUESTED,
+            message=f"Approval requested: {title} (cost: ${cost_estimate.amount:.4f})",
+            details={
+                "item_id": item_id,
+                "item_type": item_type.value,
+                "risk_level": risk_level,
+                "requires_live_mode": requires_live_mode,
+                "connector": connector_name,
+                "operation": operation,
+                "estimated_cost": cost_estimate.amount,
+                "cost_class": cost_estimate.cost_class.value,
+                "cost_policy_outcome": cost_result.outcome.value,
+                "cost_requires_approval": cost_requires_approval,
+            },
+        )
+
+        return item
+
+    def evaluate_plan_cost(
+        self,
+        plan_id: str,
+        steps: List[Dict[str, Any]],
+        backend: str,
+        business_id: Optional[str] = None,
+    ) -> CostPolicyResult:
+        """
+        Evaluate cost policy for an execution plan.
+
+        Args:
+            plan_id: Execution plan ID
+            steps: Plan steps
+            backend: Backend type
+            business_id: Business context
+
+        Returns:
+            CostPolicyResult with policy evaluation
+        """
+        # Estimate total plan cost
+        plan_estimate = estimate_plan_cost(steps, backend)
+
+        # Evaluate policy
+        cost_engine = self._get_cost_policy_engine()
+        result = cost_engine.evaluate_plan(
+            plan_estimate=plan_estimate,
+            steps=steps,
+            business_id=business_id,
+        )
+
+        # Log evaluation
+        self._event_logger.log_cost_policy_evaluated(
+            connector="plan",
+            operation=plan_id,
+            estimated_cost=plan_estimate.amount,
+            cost_class=plan_estimate.cost_class.value,
+            outcome=result.outcome.value,
+            rule_id=result.rule_id,
+            requires_approval=result.requires_approval,
+            business_id=business_id,
+        )
+
+        return result
 
     def get_pending_items(self) -> List[WorkflowItemContext]:
         """Get all items pending approval."""
@@ -368,6 +630,17 @@ class ApprovalWorkflow:
         if promote_to_live and item.requires_live_mode:
             item.current_mode = "live"
 
+        # Update connector action record if exists
+        execution_id = self._item_to_execution.get(item_id)
+        if execution_id:
+            history = self._get_connector_action_history()
+            history.update_action_approval(
+                execution_id=execution_id,
+                approval_state="approved",
+                approval_id=item.approval_record_id,
+                operator_decision_ref=approver,
+            )
+
         # Log approval event
         self._event_logger.log(
             event_type=EventType.APPROVAL_GRANTED,
@@ -443,6 +716,21 @@ class ApprovalWorkflow:
         # Update item status
         item.status = WorkflowItemStatus.DENIED
         item.denial_rationale = rationale
+
+        # Update connector action record if exists
+        execution_id = self._item_to_execution.get(item_id)
+        if execution_id:
+            history = self._get_connector_action_history()
+            history.update_action_approval(
+                execution_id=execution_id,
+                approval_state="denied",
+                operator_decision_ref=denier,
+            )
+            history.update_action_status(
+                execution_id=execution_id,
+                execution_status="blocked",
+                error_summary=f"Denied by {denier}: {rationale}",
+            )
 
         # Log denial event
         self._event_logger.log(
@@ -553,6 +841,21 @@ class ApprovalWorkflow:
         item.execution_result = result
         item.error = error
 
+        # Update connector action record if exists
+        execution_id = self._item_to_execution.get(item_id)
+        if execution_id:
+            history = self._get_connector_action_history()
+            history.record_action_completed(
+                execution_id=execution_id,
+                success=success,
+                response_summary=str(result) if result else None,
+                error_summary=error,
+            )
+
+    def get_execution_id(self, item_id: str) -> Optional[str]:
+        """Get connector execution ID for a workflow item."""
+        return self._item_to_execution.get(item_id)
+
     def get_history(
         self,
         limit: int = 100,
@@ -579,6 +882,9 @@ class ApprovalWorkflow:
 
         by_status = {}
         by_type = {}
+        by_cost_outcome = {}
+
+        total_estimated_cost = 0.0
 
         for item in items:
             status_key = item.status.value
@@ -587,19 +893,32 @@ class ApprovalWorkflow:
             type_key = item.item_type.value
             by_type[type_key] = by_type.get(type_key, 0) + 1
 
+            if item.cost_policy_outcome:
+                by_cost_outcome[item.cost_policy_outcome] = by_cost_outcome.get(item.cost_policy_outcome, 0) + 1
+
+            total_estimated_cost += item.estimated_cost
+
         pending = len([i for i in items if i.status == WorkflowItemStatus.PENDING_APPROVAL])
         live_mode_pending = len([
             i for i in items
             if i.status == WorkflowItemStatus.PENDING_APPROVAL
             and i.requires_live_mode
         ])
+        cost_approval_pending = len([
+            i for i in items
+            if i.status == WorkflowItemStatus.PENDING_APPROVAL
+            and i.cost_policy_outcome == CostPolicyOutcome.REQUIRES_APPROVAL.value
+        ])
 
         return {
             "total_items": len(items),
             "pending_approval": pending,
             "live_mode_pending": live_mode_pending,
+            "cost_approval_pending": cost_approval_pending,
+            "total_estimated_cost": total_estimated_cost,
             "by_status": by_status,
             "by_type": by_type,
+            "by_cost_outcome": by_cost_outcome,
         }
 
 

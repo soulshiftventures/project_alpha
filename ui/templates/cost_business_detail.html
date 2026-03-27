@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Business Costs - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Business Cost Detail</h1>
+    <p class="subtitle">Cost breakdown for business: <code>{{ business_id }}</code></p>
+</div>
+
+<section class="panel">
+    <h2>Cost Summary</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.4f"|format(costs.total_cost or 0) }}</span>
+            <span class="stat-label">Total Cost</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.4f"|format(costs.estimated_cost or 0) }}</span>
+            <span class="stat-label">Estimated</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">${{ "%.4f"|format(costs.actual_cost or 0) }}</span>
+            <span class="stat-label">Actual</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ costs.record_count or 0 }}</span>
+            <span class="stat-label">Records</span>
+        </div>
+    </div>
+</section>
+
+{% if costs.by_connector %}
+<section class="panel">
+    <h2>By Connector</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Connector</th>
+                <th>Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for connector, amount in costs.by_connector.items() %}
+            <tr>
+                <td>{{ connector }}</td>
+                <td>${{ "%.4f"|format(amount) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<section class="panel">
+    <h2>Cost Records</h2>
+    {% if records %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Connector</th>
+                <th>Operation</th>
+                <th>Estimated</th>
+                <th>Actual</th>
+                <th>Class</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cost in records %}
+            <tr>
+                <td><code>{{ cost.cost_id[:8] }}...</code></td>
+                <td>{{ cost.record_type }}</td>
+                <td>{{ cost.connector or '-' }}</td>
+                <td>{{ cost.operation or '-' }}</td>
+                <td>${{ "%.4f"|format(cost.estimated_amount or 0) }}</td>
+                <td>{{ ("$%.4f"|format(cost.actual_amount)) if cost.actual_amount else '-' }}</td>
+                <td><span class="status-badge {{ cost.cost_class or 'unknown' }}">{{ cost.cost_class or 'unknown' }}</span></td>
+                <td>{{ cost.created_at[:19] if cost.created_at else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No cost records found for this business</p>
+    {% endif %}
+</section>
+
+<div class="actions">
+    <a href="{{ url_for('costs') }}" class="btn">Back to Costs</a>
+</div>
+{% endblock %}

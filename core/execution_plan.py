@@ -25,16 +25,40 @@ def _utc_now() -> datetime:
 
 
 class ExecutionDomain(Enum):
-    """Domain categories for execution routing."""
-    RESEARCH = "research"
-    PLANNING = "planning"
-    PRODUCT = "product"
-    OPERATIONS = "operations"
-    GROWTH = "growth"
-    AUTOMATION = "automation"
-    VALIDATION = "validation"
-    CONTENT = "content"
-    UNKNOWN = "unknown"
+    """
+    Domain categories for execution routing.
+
+    Project Alpha supports multiple business and operational domains,
+    enabling domain-neutral execution planning and skill selection.
+    """
+    # Knowledge & Strategy
+    RESEARCH = "research"                    # Market research, competitive intelligence, data gathering
+    STRATEGY = "strategy"                    # Strategic planning, business strategy, decision analysis
+    PLANNING = "planning"                    # Project planning, roadmapping, resource allocation
+
+    # Product & Engineering
+    PRODUCT = "product"                      # Product development, feature planning, requirements
+    ENGINEERING = "engineering"              # Software development, technical implementation
+    VALIDATION = "validation"                # Testing, QA, validation, verification
+
+    # Operations & Execution
+    OPERATIONS = "operations"                # Day-to-day operations, process execution
+    AUTOMATION = "automation"                # Workflow automation, process automation
+    INTERNAL_ADMIN = "internal_admin"        # Internal administration, housekeeping
+
+    # Finance & Compliance
+    FINANCE = "finance"                      # Financial planning, budgeting, accounting
+    COMPLIANCE = "compliance"                # Legal compliance, regulatory, auditing
+
+    # Customer & Growth
+    GROWTH = "growth"                        # Business growth, expansion, scaling
+    CUSTOMER_SUPPORT = "customer_support"    # Customer service, support, success
+
+    # Content & Communication
+    CONTENT = "content"                      # Content creation, documentation, knowledge management
+
+    # Fallback
+    UNKNOWN = "unknown"                      # Unclassified or multi-domain
 
 
 class ExecutionStatus(Enum):

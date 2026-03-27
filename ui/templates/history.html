@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}History - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Persistence & History</h1>
+    <p class="subtitle">View persisted records and state recovery information</p>
+</div>
+
+<section class="panel">
+    <h2>Persistence Status</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">{{ 'Enabled' if persistence_stats.persistence_enabled else 'Disabled' }}</span>
+            <span class="stat-label">Persistence</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ persistence_stats.mode or 'N/A' }}</span>
+            <span class="stat-label">Mode</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ persistence_stats.tracked_approvals or 0 }}</span>
+            <span class="stat-label">Tracked Approvals</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ persistence_stats.tracked_jobs or 0 }}</span>
+            <span class="stat-label">Tracked Jobs</span>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>History Summary</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-value">{{ history_summary.total_approvals or 0 }}</span>
+            <span class="stat-label">Total Approvals</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ history_summary.total_jobs or 0 }}</span>
+            <span class="stat-label">Total Jobs</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ history_summary.total_plans or 0 }}</span>
+            <span class="stat-label">Total Plans</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ history_summary.total_events or 0 }}</span>
+            <span class="stat-label">Total Events</span>
+        </div>
+    </div>
+</section>
+
+{% if persistence_stats.last_recovery %}
+<section class="panel">
+    <h2>Last Recovery</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <span class="info-label">Success:</span>
+            <span class="info-value">{{ 'Yes' if persistence_stats.last_recovery.success else 'No' }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Timestamp:</span>
+            <span class="info-value">{{ persistence_stats.last_recovery.timestamp }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Recovered Approvals:</span>
+            <span class="info-value">{{ persistence_stats.last_recovery.recovered_approvals }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Recovered Jobs:</span>
+            <span class="info-value">{{ persistence_stats.last_recovery.recovered_jobs }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Recovered Plans:</span>
+            <span class="info-value">{{ persistence_stats.last_recovery.recovered_plans }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Recovered Promotions:</span>
+            <span class="info-value">{{ persistence_stats.last_recovery.recovered_promotions }}</span>
+        </div>
+    </div>
+    {% if persistence_stats.last_recovery.errors %}
+    <div class="error-list">
+        <h3>Recovery Errors</h3>
+        <ul>
+            {% for error in persistence_stats.last_recovery.errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="panel">
+    <h2>API Access</h2>
+    <p>Access persisted history via these API endpoints:</p>
+    <ul class="api-list">
+        <li><code>GET /api/history/approvals</code> - Approval history</li>
+        <li><code>GET /api/history/jobs</code> - Job history</li>
+        <li><code>GET /api/history/plans</code> - Execution plan history</li>
+        <li><code>GET /api/history/events</code> - Event history</li>
+        <li><code>GET /api/history/costs</code> - Cost record history</li>
+        <li><code>GET /api/history/budgets</code> - Budget snapshots</li>
+    </ul>
+</section>
+{% endblock %}

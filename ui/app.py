@@ -690,6 +690,425 @@ def api_rotation():
 
 
 # =============================================================================
+# Cost & Budget Overview
+# =============================================================================
+
+@app.route("/costs")
+def costs():
+    """Cost and budget overview page."""
+    service = get_service()
+    cost_summary = service.get_cost_summary()
+    budget_summary = service.get_budget_summary()
+    recent_costs = service.get_cost_records(limit=20)
+    cost_by_connector = service.get_cost_by_connector()
+    cost_by_business = service.get_cost_by_business()
+    cost_policies = service.get_cost_policies()
+
+    return render_template(
+        "costs.html",
+        cost_summary=cost_summary,
+        budget_summary=budget_summary,
+        recent_costs=recent_costs,
+        cost_by_connector=cost_by_connector,
+        cost_by_business=cost_by_business,
+        cost_policies=cost_policies,
+    )
+
+
+@app.route("/costs/business/<business_id>")
+def cost_business_detail(business_id: str):
+    """Cost detail for a specific business."""
+    service = get_service()
+    business_costs = service.get_business_cost_detail(business_id)
+    cost_records = service.get_cost_records(business_id=business_id, limit=50)
+
+    return render_template(
+        "cost_business_detail.html",
+        business_id=business_id,
+        costs=business_costs,
+        records=cost_records,
+    )
+
+
+@app.route("/api/costs/summary")
+def api_cost_summary():
+    """API: Get cost tracking summary."""
+    service = get_service()
+    summary = service.get_cost_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/costs/budget")
+def api_budget_summary():
+    """API: Get budget status summary."""
+    service = get_service()
+    summary = service.get_budget_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/costs/budget/<scope>")
+def api_budget_status(scope: str):
+    """API: Get budget status for a specific scope."""
+    service = get_service()
+    scope_id = request.args.get("scope_id")
+    status = service.get_budget_status(scope, scope_id)
+    return jsonify(status)
+
+
+@app.route("/api/costs/records")
+def api_cost_records():
+    """API: Get cost records with optional filters."""
+    service = get_service()
+    record_type = request.args.get("record_type")
+    connector = request.args.get("connector")
+    business_id = request.args.get("business_id")
+    limit = int(request.args.get("limit", 100))
+
+    records = service.get_cost_records(
+        record_type=record_type,
+        connector=connector,
+        business_id=business_id,
+        limit=limit,
+    )
+    return jsonify(records)
+
+
+@app.route("/api/costs/by-connector")
+def api_cost_by_connector():
+    """API: Get costs aggregated by connector."""
+    service = get_service()
+    costs = service.get_cost_by_connector()
+    return jsonify(costs)
+
+
+@app.route("/api/costs/by-business")
+def api_cost_by_business():
+    """API: Get costs aggregated by business."""
+    service = get_service()
+    costs = service.get_cost_by_business()
+    return jsonify(costs)
+
+
+@app.route("/api/costs/business/<business_id>")
+def api_business_costs(business_id: str):
+    """API: Get detailed costs for a business."""
+    service = get_service()
+    costs = service.get_business_cost_detail(business_id)
+    return jsonify(costs)
+
+
+@app.route("/api/costs/policies")
+def api_cost_policies():
+    """API: Get cost policy rules."""
+    service = get_service()
+    policies = service.get_cost_policies()
+    return jsonify(policies)
+
+
+# =============================================================================
+# Persistence & History
+# =============================================================================
+
+@app.route("/history")
+def history():
+    """Persistence and history overview page."""
+    service = get_service()
+    persistence_stats = service.get_persistence_stats()
+    history_summary = service.get_history_summary()
+
+    return render_template(
+        "history.html",
+        persistence_stats=persistence_stats,
+        history_summary=history_summary,
+    )
+
+
+@app.route("/api/persistence/stats")
+def api_persistence_stats():
+    """API: Get persistence manager statistics."""
+    service = get_service()
+    stats = service.get_persistence_stats()
+    return jsonify(stats)
+
+
+@app.route("/api/history/summary")
+def api_history_summary():
+    """API: Get history query summary."""
+    service = get_service()
+    summary = service.get_history_summary()
+    return jsonify(summary)
+
+
+@app.route("/api/history/approvals")
+def api_history_approvals():
+    """API: Get persisted approval history."""
+    service = get_service()
+    status = request.args.get("status")
+    limit = int(request.args.get("limit", 100))
+    approvals = service.get_approval_history_persisted(status=status, limit=limit)
+    return jsonify(approvals)
+
+
+@app.route("/api/history/jobs")
+def api_history_jobs():
+    """API: Get persisted job history."""
+    service = get_service()
+    status = request.args.get("status")
+    limit = int(request.args.get("limit", 100))
+    jobs = service.get_job_history_persisted(status=status, limit=limit)
+    return jsonify(jobs)
+
+
+@app.route("/api/history/plans")
+def api_history_plans():
+    """API: Get persisted execution plan history."""
+    service = get_service()
+    limit = int(request.args.get("limit", 50))
+    plans = service.get_plan_history_persisted(limit=limit)
+    return jsonify(plans)
+
+
+@app.route("/api/history/events")
+def api_history_events():
+    """API: Get persisted event history."""
+    service = get_service()
+    event_type = request.args.get("type")
+    severity = request.args.get("severity")
+    limit = int(request.args.get("limit", 100))
+    events = service.get_event_history_persisted(
+        event_type=event_type,
+        severity=severity,
+        limit=limit,
+    )
+    return jsonify(events)
+
+
+@app.route("/api/history/costs")
+def api_history_costs():
+    """API: Get persisted cost record history."""
+    service = get_service()
+    record_type = request.args.get("record_type")
+    connector = request.args.get("connector")
+    business_id = request.args.get("business_id")
+    limit = int(request.args.get("limit", 100))
+    costs = service.get_cost_history_persisted(
+        record_type=record_type,
+        connector=connector,
+        business_id=business_id,
+        limit=limit,
+    )
+    return jsonify(costs)
+
+
+@app.route("/api/history/budgets")
+def api_history_budgets():
+    """API: Get budget snapshots over time."""
+    service = get_service()
+    scope = request.args.get("scope")
+    scope_id = request.args.get("scope_id")
+    limit = int(request.args.get("limit", 100))
+    snapshots = service.get_budget_snapshots(scope=scope, scope_id=scope_id, limit=limit)
+    return jsonify(snapshots)
+
+
+# =============================================================================
+# Error Handlers
+# =============================================================================
+
+# =============================================================================
+# DISCOVERY / OPPORTUNITY ROUTES
+# =============================================================================
+
+@app.route("/discovery")
+def discovery():
+    """Business discovery page - intake and opportunity list."""
+    service = get_service()
+    opportunities = service.get_opportunities(limit=50)
+    return render_template("discovery.html", opportunities=opportunities)
+
+
+@app.route("/discovery/intake", methods=["POST"])
+def discovery_intake():
+    """Process discovery input."""
+    service = get_service()
+
+    raw_text = request.form.get("raw_text", "").strip()
+    tags_str = request.form.get("tags", "").strip()
+
+    if not raw_text:
+        return redirect(url_for("discovery"))
+
+    tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else None
+
+    # Process through pipeline
+    opportunities = service.process_discovery_input(
+        raw_text=raw_text,
+        tags=tags,
+    )
+
+    # Redirect to first opportunity detail
+    if opportunities:
+        return redirect(url_for("opportunity_detail", opportunity_id=opportunities[0]["opportunity_id"]))
+
+    return redirect(url_for("discovery"))
+
+
+@app.route("/discovery/<opportunity_id>")
+def opportunity_detail(opportunity_id):
+    """Opportunity detail page."""
+    service = get_service()
+    opportunity = service.get_opportunity(opportunity_id)
+
+    if not opportunity:
+        return render_template("error.html", message="Opportunity not found"), 404
+
+    return render_template("opportunity_detail.html", opportunity=opportunity)
+
+
+@app.route("/discovery/<opportunity_id>/status", methods=["POST"])
+def update_opportunity_status(opportunity_id):
+    """Update opportunity status."""
+    service = get_service()
+
+    new_status = request.form.get("new_status")
+    note = request.form.get("note", "")
+
+    if not new_status:
+        return redirect(url_for("opportunity_detail", opportunity_id=opportunity_id))
+
+    service.update_opportunity_status(
+        opportunity_id=opportunity_id,
+        new_status=new_status,
+        note=note,
+    )
+
+    return redirect(url_for("opportunity_detail", opportunity_id=opportunity_id))
+
+
+@app.route("/discovery/<opportunity_id>/handoff", methods=["POST"])
+def create_handoff(opportunity_id):
+    """Create handoff from opportunity to execution."""
+    service = get_service()
+
+    mode = request.form.get("mode")
+
+    if not mode:
+        return redirect(url_for("opportunity_detail", opportunity_id=opportunity_id))
+
+    result = service.create_handoff_from_opportunity(
+        opportunity_id=opportunity_id,
+        mode=mode,
+        created_by="principal",
+    )
+
+    if not result:
+        return redirect(url_for("opportunity_detail", opportunity_id=opportunity_id))
+
+    # Redirect to plan view if a plan was created
+    if result.get("plan_id"):
+        return redirect(url_for("plan_detail", plan_id=result["plan_id"]))
+
+    # Otherwise back to opportunity detail
+    return redirect(url_for("opportunity_detail", opportunity_id=opportunity_id))
+
+
+# =============================================================================
+# DISCOVERY API ROUTES
+# =============================================================================
+
+@app.route("/api/opportunities")
+def api_opportunities():
+    """API: List opportunities."""
+    service = get_service()
+    status = request.args.get("status")
+    limit = int(request.args.get("limit", 100))
+
+    opportunities = service.get_opportunities(status=status, limit=limit)
+    return jsonify({
+        "opportunities": opportunities,
+        "count": len(opportunities),
+    })
+
+
+@app.route("/api/opportunities/<opportunity_id>")
+def api_opportunity_detail(opportunity_id):
+    """API: Get opportunity detail."""
+    service = get_service()
+    opportunity = service.get_opportunity(opportunity_id)
+
+    if not opportunity:
+        return jsonify({"error": "Opportunity not found"}), 404
+
+    return jsonify(opportunity)
+
+
+@app.route("/api/opportunities/stats")
+def api_opportunity_stats():
+    """API: Get opportunity stats."""
+    service = get_service()
+    stats = service.get_opportunity_stats()
+    return jsonify(stats)
+
+
+# =============================================================================
+# Capacity Management Routes
+# =============================================================================
+
+@app.route("/capacity")
+def capacity():
+    """Capacity management page."""
+    service = get_operator_service()
+
+    # Get capacity status
+    capacity_status = service.get_capacity_status()
+
+    # Get policy summary
+    policy_summary = service.get_capacity_policy_summary()
+
+    # Get recent decisions
+    recent_decisions = service.get_capacity_decisions(limit=20)
+
+    return render_template(
+        "capacity.html",
+        capacity_status=capacity_status,
+        policy_summary=policy_summary,
+        recent_decisions=recent_decisions
+    )
+
+
+@app.route("/api/capacity/status")
+def api_capacity_status():
+    """API endpoint for capacity status."""
+    service = get_operator_service()
+    status = service.get_capacity_status()
+    return jsonify(status)
+
+
+@app.route("/api/capacity/policies")
+def api_capacity_policies():
+    """API endpoint for capacity policies."""
+    service = get_operator_service()
+    policies = service.get_capacity_policy_summary()
+    return jsonify(policies)
+
+
+@app.route("/api/capacity/decisions")
+def api_capacity_decisions():
+    """API endpoint for capacity decisions."""
+    service = get_operator_service()
+    dimension = request.args.get("dimension")
+    decision = request.args.get("decision")
+    limit = int(request.args.get("limit", 50))
+
+    decisions = service.get_capacity_decisions(
+        dimension=dimension,
+        decision=decision,
+        limit=limit
+    )
+    return jsonify({"decisions": decisions})
+
+
+# =============================================================================
 # Error Handlers
 # =============================================================================
 
@@ -726,6 +1145,7 @@ if __name__ == "__main__":
 
   Routes:
     /             - System Overview
+    /discovery    - Business Discovery (NEW!)
     /portfolio    - Portfolio View
     /goals        - Goal Submission
     /plans        - Execution Plans
@@ -735,6 +1155,8 @@ if __name__ == "__main__":
     /backends     - Available Backends
     /integrations - Integration Status
     /credentials  - Credential Health
+    /costs        - Cost & Budget Overview
+    /history      - Persistence History
 
   API endpoints available at /api/*
 
@@ -743,3 +1165,79 @@ if __name__ == "__main__":
 """)
 
     app.run(host="0.0.0.0", port=port, debug=debug)
+
+# =============================================================================
+# Connector Action History
+# =============================================================================
+
+@app.route("/connector-actions")
+def connector_actions_list():
+    """List connector action execution history."""
+    service = get_service()
+
+    # Get filter parameters
+    connector = request.args.get("connector", "")
+    mode = request.args.get("mode", "")
+    status = request.args.get("status", "")
+    related_id = request.args.get("related_id", "")
+
+    actions, stats = service.get_connector_actions(
+        connector=connector if connector else None,
+        mode=mode if mode else None,
+        status=status if status else None,
+        related_id=related_id if related_id else None,
+        limit=100,
+    )
+
+    connectors = service.get_unique_connectors()
+
+    return render_template(
+        "connector_actions.html",
+        actions=actions,
+        stats=stats,
+        connectors=connectors,
+        selected_connector=connector,
+        selected_mode=mode,
+        selected_status=status,
+        related_id=related_id,
+    )
+
+
+@app.route("/connector-actions/<execution_id>")
+def connector_action_detail(execution_id: str):
+    """Detail view for a connector action execution."""
+    service = get_service()
+    action = service.get_connector_action_detail(execution_id)
+
+    if not action:
+        return render_template("error.html", error="Connector action not found"), 404
+
+    return render_template(
+        "connector_action_detail.html",
+        action=action,
+    )
+
+
+@app.route("/api/connector-actions")
+def api_connector_actions():
+    """API: Get connector action history."""
+    service = get_service()
+
+    connector = request.args.get("connector")
+    mode = request.args.get("mode")
+    status = request.args.get("status")
+    related_id = request.args.get("related_id")
+    limit = int(request.args.get("limit", 100))
+
+    actions, stats = service.get_connector_actions(
+        connector=connector,
+        mode=mode,
+        status=status,
+        related_id=related_id,
+        limit=limit,
+    )
+
+    return jsonify({
+        "actions": actions,
+        "stats": stats,
+    })
