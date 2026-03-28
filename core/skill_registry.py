@@ -80,12 +80,22 @@ class SkillDefinition:
         if query_lower in self.description.lower():
             score = max(score, 0.6)
 
-        # Keyword matches
+        # Tokenize query into words for better matching
+        query_words = query_lower.split()
+
+        # Keyword matches (check both full query and individual words)
         for keyword in self.keywords:
             if query_lower == keyword.lower():
                 score = max(score, 0.7)
             elif query_lower in keyword.lower():
                 score = max(score, 0.4)
+            else:
+                # Check individual words from query
+                for word in query_words:
+                    if word == keyword.lower():
+                        score = max(score, 0.7)
+                    elif word in keyword.lower() or keyword.lower() in word:
+                        score = max(score, 0.4)
 
         return score
 

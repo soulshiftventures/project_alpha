@@ -1,6 +1,17 @@
-# Project Alpha
+# Project Alpha - Now with Seed Core v1
 
-**AI-Powered Business Execution System with Multi-Stage Workflow Management**
+**Status: Self-Improving Agent Core (Seed Core v1) + Project Alpha Infrastructure**
+
+## IMPORTANT ARCHITECTURAL CHANGE
+
+This repository now contains **Seed Core v1** - the first real skill-aware self-improving agent core.
+
+**What Changed:**
+- **Old Core**: Hardcoded orchestration hierarchy, static role-skill mappings, template-based scenarios
+- **New Core**: Seed Core v1 - learns from actual skill execution outcomes, improves over time, decomposes complex goals
+- **Alpha Infrastructure**: Remains as useful infrastructure (persistence, UI, connectors, approval workflows)
+
+**Seed Core is not a broad platform. It's the minimal self-building core that was missing.**
 
 ## Location
 
