@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Workflow Templates - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Workflow Templates</h1>
+    <p class="page-description">Reusable templates for common operator workflows</p>
+</div>
+
+{# Summary Stats #}
+<div class="stats-row">
+    <div class="stat-card">
+        <span class="stat-value">{{ summary.get('total', 0) }}</span>
+        <span class="stat-label">Total Templates</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-value">{{ summary.get('live_capable', 0) }}</span>
+        <span class="stat-label">Live-Capable</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-value">{{ summary.get('by_complexity', {}).get('simple', 0) }}</span>
+        <span class="stat-label">Simple</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-value">{{ summary.get('requires_credentials', 0) }}</span>
+        <span class="stat-label">Requires Credentials</span>
+    </div>
+</div>
+
+{# Filters #}
+<div class="filter-bar">
+    <form method="GET" action="{{ url_for('templates_browse') }}" class="filter-form">
+        <div class="filter-group">
+            <label for="category">Category</label>
+            <select name="category" id="category" onchange="this.form.submit()">
+                <option value="">All Categories</option>
+                {% for cat, count in summary.get('by_category', {}).items() %}
+                <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>
+                    {{ cat|title }} ({{ count }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="mode">Mode</label>
+            <select name="mode" id="mode" onchange="this.form.submit()">
+                <option value="">All Modes</option>
+                {% for mode, count in summary.get('by_mode', {}).items() %}
+                <option value="{{ mode }}" {% if selected_mode == mode %}selected{% endif %}>
+                    {{ mode|replace('_', ' ')|title }} ({{ count }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="search">Search</label>
+            <input type="text" name="search" id="search" placeholder="Search templates..."
+                   value="{{ search_query|default('') }}">
+            <button type="submit" class="btn btn-sm">Search</button>
+        </div>
+    </form>
+</div>
+
+{# Template Grid #}
+<div class="template-grid">
+    {% if templates %}
+        {% for template in templates %}
+        <div class="template-card card">
+            <div class="card-header">
+                <div class="template-icon icon-{{ template.icon|default('play') }}">
+                    {% if template.icon == 'lightbulb' %}&#128161;{% endif %}
+                    {% if template.icon == 'search' %}&#128270;{% endif %}
+                    {% if template.icon == 'globe' %}&#127760;{% endif %}
+                    {% if template.icon == 'bell' %}&#128276;{% endif %}
+                    {% if template.icon == 'users' %}&#128101;{% endif %}
+                    {% if template.icon == 'activity' %}&#128200;{% endif %}
+                    {% if template.icon == 'play' %}&#9654;{% endif %}
+                </div>
+                <h3>{{ template.name }}</h3>
+            </div>
+            <div class="card-body">
+                <p class="template-description">{{ template.description }}</p>
+
+                <div class="template-meta">
+                    <span class="badge badge-{{ template.category }}">{{ template.category|title }}</span>
+                    <span class="badge badge-{{ template.mode }}">
+                        {% if template.mode == 'dry_run_only' %}Dry-Run Only{% endif %}
+                        {% if template.mode == 'live_capable' %}Live Capable{% endif %}
+                        {% if template.mode == 'read_only' %}Read Only{% endif %}
+                    </span>
+                    <span class="badge badge-complexity-{{ template.complexity }}">{{ template.complexity|title }}</span>
+                </div>
+
+                <div class="template-details">
+                    <span class="detail-item">
+                        <strong>Inputs:</strong> {{ template.inputs|length }}
+                    </span>
+                    <span class="detail-item">
+                        <strong>Steps:</strong> {{ template.steps|length }}
+                    </span>
+                    <span class="detail-item">
+                        <strong>Time:</strong> {{ template.estimated_duration }}
+                    </span>
+                </div>
+
+                {% if template.requires_live_credentials %}
+                <p class="credential-note">Requires credentials for live mode</p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('template_detail', template_id=template.template_id) }}" class="btn btn-secondary">View Details</a>
+                <a href="{{ url_for('template_launch', template_id=template.template_id) }}" class="btn btn-primary">Launch</a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <p>No templates found matching your criteria.</p>
+            <a href="{{ url_for('templates_browse') }}" class="btn btn-secondary">Clear Filters</a>
+        </div>
+    {% endif %}
+</div>
+
+{# Recent Launches #}
+{% if recent_launches %}
+<div class="recent-launches card">
+    <div class="card-header">
+        <h3>Recent Template Launches</h3>
+    </div>
+    <div class="card-body">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Template</th>
+                    <th>Launched</th>
+                    <th>Mode</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for launch in recent_launches %}
+                <tr>
+                    <td>{{ launch.template_id }}</td>
+                    <td>{{ launch.launched_at[:19] }}</td>
+                    <td>{% if launch.dry_run %}Dry-Run{% else %}Live{% endif %}</td>
+                    <td><span class="status-{{ launch.status }}">{{ launch.status|title }}</span></td>
+                    <td>
+                        {% if launch.scenario_run_id %}
+                        <a href="{{ url_for('scenario_run_detail', run_id=launch.scenario_run_id) }}">View Run</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

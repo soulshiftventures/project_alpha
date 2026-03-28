@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}First-Use Setup - {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1>First-Use Setup</h1>
+
+<div class="setup-status">
+    <div class="status-card {% if checklist.status == 'completed' %}status-ok{% elif checklist.status == 'needs_configuration' %}status-warning{% else %}status-error{% endif %}">
+        <h3>Setup Status</h3>
+        <span class="status-badge">{{ checklist.status | replace('_', ' ') | upper }}</span>
+    </div>
+    <div class="status-card">
+        <h3>Progress</h3>
+        <span class="count">{{ checklist.completed_count }}/{{ checklist.total_count }}</span>
+    </div>
+</div>
+
+<h2>Setup Checklist</h2>
+<div class="checklist-detailed">
+    {% for item in checklist.items %}
+    <div class="checklist-item {% if item.completed %}completed{% else %}pending{% endif %}">
+        <div class="item-header">
+            <span class="checkbox">{{ '&#9745;' if item.completed else '&#9744;' }}</span>
+            <span class="label">{{ item.label }}</span>
+            {% if item.required %}
+            <span class="required-badge">Required</span>
+            {% endif %}
+        </div>
+        {% if not item.completed and item.action %}
+        <div class="item-action">
+            <strong>Action needed:</strong>
+            <code>{{ item.action }}</code>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<h2>Connector Status</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Connector</th>
+            <th>Status</th>
+            <th>Dry-Run</th>
+            <th>Live</th>
+            <th>Missing Credentials</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for conn in connectors %}
+        <tr class="{% if conn.live_ready %}row-ok{% elif conn.dry_run_ready %}row-warning{% else %}row-error{% endif %}">
+            <td><strong>{{ conn.name | title }}</strong></td>
+            <td><span class="status-badge status-{{ conn.status }}">{{ conn.status | upper }}</span></td>
+            <td>{{ 'Ready' if conn.dry_run_ready else 'Not Ready' }}</td>
+            <td>{{ 'Ready' if conn.live_ready else 'Not Ready' }}</td>
+            <td>
+                {% if conn.missing_credentials %}
+                <ul class="missing-list">
+                    {% for cred in conn.missing_credentials %}
+                    <li><code>{{ cred }}</code></li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <span class="all-set">All configured</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Startup Instructions</h2>
+<div class="instructions-box">
+    <pre>{% for line in instructions %}{{ line }}
+{% endfor %}</pre>
+</div>
+
+<h2>Quick Reference</h2>
+<div class="quick-ref">
+    <div class="ref-section">
+        <h4>Essential Commands</h4>
+        <ul>
+            <li><code>./run_full.sh</code> - Start the full system</li>
+            <li><code>./check_ready.sh</code> - Check system readiness</li>
+            <li><code>./run_ui.sh</code> - Start UI only</li>
+            <li><code>./verify.sh</code> - Run verification suite</li>
+        </ul>
+    </div>
+    <div class="ref-section">
+        <h4>Key URLs</h4>
+        <ul>
+            <li><a href="/">Dashboard</a> - http://localhost:5000</li>
+            <li><a href="/readiness">Readiness</a> - http://localhost:5000/readiness</li>
+            <li><a href="/health">Health</a> - http://localhost:5000/health</li>
+        </ul>
+    </div>
+    <div class="ref-section">
+        <h4>Configuration Files</h4>
+        <ul>
+            <li><code>.env</code> - Environment credentials (create from .env.example)</li>
+            <li><code>project_alpha/data/state.db</code> - Persistent state database</li>
+        </ul>
+    </div>
+</div>
+
+{% if checklist.next_step %}
+<div class="alert alert-info">
+    <h3>Next Step</h3>
+    <p>Complete: <strong>{{ checklist.next_step }}</strong></p>
+</div>
+{% endif %}
+
+<div class="actions">
+    <a href="{{ url_for('readiness') }}" class="btn btn-secondary">View Full Readiness Report</a>
+    <a href="{{ url_for('health') }}" class="btn btn-secondary">View Health Status</a>
+    <a href="{{ url_for('home') }}" class="btn btn-primary">Go to Dashboard</a>
+</div>
+
+{% endblock %}

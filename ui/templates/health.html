@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}System Health - {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1>System Health</h1>
+
+<div class="status-overview">
+    <div class="status-card {% if health.overall_status == 'healthy' %}status-ok{% elif health.overall_status == 'degraded' %}status-warning{% else %}status-error{% endif %}">
+        <h3>Overall Status</h3>
+        <span class="status-badge status-{{ health.overall_status }}">{{ health.overall_status | upper }}</span>
+    </div>
+    <div class="status-card status-ok">
+        <h3>Healthy</h3>
+        <span class="count">{{ health.healthy_count }}</span>
+    </div>
+    <div class="status-card status-warning">
+        <h3>Degraded</h3>
+        <span class="count">{{ health.degraded_count }}</span>
+    </div>
+    <div class="status-card status-error">
+        <h3>Unhealthy</h3>
+        <span class="count">{{ health.unhealthy_count }}</span>
+    </div>
+</div>
+
+<h2>Subsystem Status</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Subsystem</th>
+            <th>Status</th>
+            <th>Latency</th>
+            <th>Message</th>
+            <th>Details</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for subsys in health.subsystems %}
+        <tr class="{% if subsys.status == 'healthy' %}row-ok{% elif subsys.status == 'degraded' %}row-warning{% else %}row-error{% endif %}">
+            <td><strong>{{ subsys.name | title }}</strong></td>
+            <td><span class="status-badge status-{{ subsys.status }}">{{ subsys.status | upper }}</span></td>
+            <td>{% if subsys.latency_ms %}{{ '%.1f' % subsys.latency_ms }}ms{% else %}-{% endif %}</td>
+            <td>{{ subsys.message }}</td>
+            <td>
+                {% if subsys.details %}
+                <details>
+                    <summary>View Details</summary>
+                    <pre>{{ subsys.details | tojson(indent=2) }}</pre>
+                </details>
+                {% else %}
+                -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Health Summary</h2>
+<div class="summary-cards">
+    {% for subsys in health.subsystems %}
+    <div class="summary-card {% if subsys.status == 'healthy' %}card-ok{% elif subsys.status == 'degraded' %}card-warning{% else %}card-error{% endif %}">
+        <h4>{{ subsys.name | title }}</h4>
+        <span class="status">{{ subsys.status | upper }}</span>
+        <p class="message">{{ subsys.message }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+<p class="timestamp">Checked at: {{ health.timestamp }}</p>
+
+<div class="actions">
+    <a href="{{ url_for('readiness') }}" class="btn btn-secondary">View Readiness Status</a>
+    <button onclick="location.reload()" class="btn btn-primary">Refresh</button>
+</div>
+
+{% endblock %}

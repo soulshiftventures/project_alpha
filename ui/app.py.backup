@@ -97,196 +97,6 @@ def api_status():
 
 
 # =============================================================================
-# Discover Page (Market-Driven Discovery)
-# =============================================================================
-
-@app.route("/discover")
-def discover_page():
-    """Discovery page - market-driven opportunity discovery."""
-    service = get_service()
-
-    # Get recent discovery runs
-    recent_discoveries = service.list_discovery_scans(limit=10)
-
-    return render_template(
-        "discover.html",
-        recent_discoveries=recent_discoveries,
-    )
-
-
-@app.route("/discover/scan-market", methods=["POST"])
-def discover_scan_market():
-    """Initiate market pain-point scan."""
-    service = get_service()
-    market_theme = request.form.get("market_theme", "").strip()
-
-    if not market_theme:
-        return redirect(url_for("discover_page"))
-
-    # Run real market discovery scan
-    result = service.run_discovery_scan(
-        mode="pain_point_scan",
-        market=market_theme,
-        customer_type="growing businesses",
-    )
-
-    # Redirect to results
-    return redirect(url_for("discover_result", scan_id=result["scan_id"]))
-
-
-@app.route("/discover/explore-problem", methods=["POST"])
-def discover_explore_problem():
-    """Explore a specific problem domain."""
-    service = get_service()
-    problem_statement = request.form.get("problem_statement", "").strip()
-
-    if not problem_statement:
-        return redirect(url_for("discover_page"))
-
-    # Run real problem exploration
-    result = service.run_discovery_scan(
-        mode="problem_exploration",
-        problem_area=problem_statement,
-    )
-
-    # Redirect to results
-    return redirect(url_for("discover_result", scan_id=result["scan_id"]))
-
-
-@app.route("/discover/from-theme", methods=["POST"])
-def discover_from_theme():
-    """Generate opportunity candidates from theme."""
-    service = get_service()
-    theme = request.form.get("theme", "").strip()
-
-    if not theme:
-        return redirect(url_for("discover_page"))
-
-    # Run real theme-based discovery
-    result = service.run_discovery_scan(
-        mode="theme_scan",
-        theme=theme,
-    )
-
-    # Redirect to results
-    return redirect(url_for("discover_result", scan_id=result["scan_id"]))
-
-
-@app.route("/discover/scan-industry", methods=["POST"])
-def discover_scan_industry():
-    """Scan a specific industry for opportunities."""
-    service = get_service()
-    industry = request.form.get("industry", "").strip()
-
-    if not industry:
-        return redirect(url_for("discover_page"))
-
-    # Run real industry scan
-    result = service.run_discovery_scan(
-        mode="industry_scan",
-        industry=industry,
-    )
-
-    # Redirect to results
-    return redirect(url_for("discover_result", scan_id=result["scan_id"]))
-
-
-@app.route("/discover/result/<scan_id>")
-def discover_result(scan_id: str):
-    """View discovery scan results."""
-    service = get_service()
-    result = service.get_discovery_scan_result(scan_id)
-
-    if not result:
-        return redirect(url_for("discover_page"))
-
-    return render_template("discover_results.html", result=result)
-
-
-@app.route("/discover/convert-to-opportunity", methods=["POST"])
-def discover_convert_to_opportunity():
-    """Convert a discovery candidate into an opportunity record."""
-    service = get_service()
-    scan_id = request.form.get("scan_id", "").strip()
-    candidate_id = request.form.get("candidate_id", "").strip()
-
-    if not scan_id or not candidate_id:
-        return redirect(url_for("discover_page"))
-
-    # Get the scan result
-    result = service.get_discovery_scan_result(scan_id)
-    if not result:
-        return redirect(url_for("discover_page"))
-
-    # Find the candidate
-    candidate = None
-    for c in result["candidates"]:
-        if c["candidate_id"] == candidate_id:
-            candidate = c
-            break
-
-    if not candidate:
-        return redirect(url_for("discover_result", scan_id=scan_id))
-
-    # Submit as a goal/opportunity
-    submission = GoalSubmission(
-        objective=candidate["title"],
-        priority=candidate["urgency"],
-        notes=f"Pain Point: {candidate['pain_point']}\nTarget Customer: {candidate['target_customer']}\nRecommended Action: {candidate['recommended_action']}",
-        requester="operator",
-    )
-
-    result = service.submit_goal(submission)
-
-    # Redirect to plan view
-    if result.execution_plan:
-        return redirect(url_for("plan_detail", request_id=result.request_id))
-
-    return redirect(url_for("discover_page"))
-
-
-# =============================================================================
-# Admin Hub
-# =============================================================================
-
-@app.route("/admin")
-def admin_hub():
-    """Admin hub - system internals and configuration."""
-    service = get_service()
-
-    # Get aggregated admin data
-    status = service.get_system_status()
-
-    # Health data
-    try:
-        from ui.services import get_combined_status
-        health = get_combined_status(service)
-    except Exception:
-        health = {"healthy": True, "healthy_subsystems": 0, "degraded_subsystems": 0}
-
-    # Backend counts
-    backends = service.get_backends()
-    backends_count = len(backends)
-    backends_active = len([b for b in backends if b.get("status") == "active"])
-
-    # Connector counts
-    connectors = service.get_connectors()
-    connectors_count = len(connectors)
-    connectors_healthy = len([c for c in connectors if c.get("status") == "healthy"])
-
-    return render_template(
-        "admin.html",
-        health=health,
-        backends_count=backends_count,
-        backends_active=backends_active,
-        connectors_count=connectors_count,
-        connectors_healthy=connectors_healthy,
-        budget_utilization=status.budget_utilization,
-        total_cost=status.total_cost_tracked,
-    )
-
-
-# =============================================================================
 # Work Queue (Unified Operator Queue)
 # =============================================================================
 
@@ -1878,6 +1688,68 @@ def api_recovery_history():
 
 
 # =============================================================================
+# Error Handlers
+# =============================================================================
+
+@app.errorhandler(404)
+def not_found(e):
+    """Handle 404 errors."""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Not found"}), 404
+    return render_template("error.html", message="Page not found"), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    """Handle 500 errors."""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Internal server error"}), 500
+    return render_template("error.html", message="Internal server error"), 500
+
+
+# =============================================================================
+# Main
+# =============================================================================
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+
+    print(f"""
+================================================================================
+  Project Alpha - Operator Interface
+================================================================================
+
+  Starting server on http://localhost:{port}
+
+  Routes:
+    /             - System Overview
+    /scenarios    - End-to-End Scenarios (NEW!)
+    /discovery    - Business Discovery
+    /portfolio    - Portfolio View
+    /goals        - Goal Submission
+    /plans        - Execution Plans
+    /approvals    - Approval Queue
+    /jobs         - Job Monitor
+    /events       - Event Log
+    /backends     - Available Backends
+    /integrations - Integration Status
+    /credentials  - Credential Health
+    /costs        - Cost & Budget Overview
+    /history      - Persistence History
+    /readiness    - System Readiness (NEW!)
+    /health       - System Health (NEW!)
+    /setup        - First-Use Setup (NEW!)
+
+  API endpoints available at /api/*
+
+  Press Ctrl+C to stop.
+================================================================================
+""")
+
+    app.run(host="0.0.0.0", port=port, debug=debug)
+
+# =============================================================================
 # Connector Action History
 # =============================================================================
 
@@ -2279,66 +2151,3 @@ def api_startup():
     skip_health = data.get("skip_health_check", False)
     result = service.run_startup(skip_health_check=skip_health)
     return jsonify(result)
-
-# =============================================================================
-# Error Handlers
-# =============================================================================
-
-@app.errorhandler(404)
-def not_found(e):
-    """Handle 404 errors."""
-    if request.path.startswith("/api/"):
-        return jsonify({"error": "Not found"}), 404
-    return render_template("error.html", message="Page not found"), 404
-
-
-@app.errorhandler(500)
-def server_error(e):
-    """Handle 500 errors."""
-    if request.path.startswith("/api/"):
-        return jsonify({"error": "Internal server error"}), 500
-    return render_template("error.html", message="Internal server error"), 500
-
-
-# =============================================================================
-# Main
-# =============================================================================
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
-
-    print(f"""
-================================================================================
-  Project Alpha - Operator Interface
-================================================================================
-
-  Starting server on http://localhost:{port}
-
-  Routes:
-    /             - System Overview
-    /scenarios    - End-to-End Scenarios (NEW!)
-    /discovery    - Business Discovery
-    /portfolio    - Portfolio View
-    /goals        - Goal Submission
-    /plans        - Execution Plans
-    /approvals    - Approval Queue
-    /jobs         - Job Monitor
-    /events       - Event Log
-    /backends     - Available Backends
-    /integrations - Integration Status
-    /credentials  - Credential Health
-    /costs        - Cost & Budget Overview
-    /history      - Persistence History
-    /readiness    - System Readiness (NEW!)
-    /health       - System Health (NEW!)
-    /setup        - First-Use Setup (NEW!)
-
-  API endpoints available at /api/*
-
-  Press Ctrl+C to stop.
-================================================================================
-""")
-
-    app.run(host="0.0.0.0", port=port, debug=debug)
-

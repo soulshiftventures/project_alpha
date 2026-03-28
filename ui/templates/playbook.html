@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Operator Playbook - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Operator Playbook</h1>
+    <p class="page-description">Practical guide for using Project Alpha effectively and safely</p>
+</div>
+
+{# Quick Reference Bar #}
+<div class="quick-ref-bar">
+    <h3>Quick Access</h3>
+    <div class="quick-ref-links">
+        {% for key, item in playbook.get('quick_reference', {}).items() %}
+        <a href="{{ item.route }}" class="quick-ref-link">{{ item.label }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+{# Playbook Sections #}
+<div class="playbook-sections">
+    {% for section in playbook.get('sections', []) %}
+    <div class="playbook-section card" id="section-{{ section.id }}">
+        <div class="card-header">
+            <h2>{{ section.title }}</h2>
+            <p class="section-summary">{{ section.summary }}</p>
+        </div>
+        <div class="card-body">
+            <ul class="topic-list">
+                {% for topic in section.topics %}
+                <li class="topic-item">
+                    {% if topic.route %}
+                    <a href="{{ topic.route }}" class="topic-link">
+                        <span class="topic-name">{{ topic.name }}</span>
+                        <span class="topic-desc">{{ topic.description }}</span>
+                    </a>
+                    {% else %}
+                    <div class="topic-info">
+                        <span class="topic-name">{{ topic.name }}</span>
+                        <span class="topic-desc">{{ topic.description }}</span>
+                    </div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# Quick Start CTA #}
+<div class="playbook-cta card">
+    <div class="card-body">
+        <h3>Ready to Get Started?</h3>
+        <p>Use our guided quick-start flows to learn by doing.</p>
+        <div class="cta-actions">
+            <a href="{{ url_for('quickstart') }}" class="btn btn-primary">Quick-Start Flows</a>
+            <a href="{{ url_for('templates_browse') }}" class="btn btn-secondary">Browse Templates</a>
+        </div>
+    </div>
+</div>
+
+{# Table of Contents (Sidebar) #}
+<div class="playbook-toc">
+    <h4>Contents</h4>
+    <ul>
+        {% for section in playbook.sections %}
+        <li><a href="#section-{{ section.id }}">{{ section.title }}</a></li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% endblock %}

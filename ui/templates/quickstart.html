@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Quick-Start Flows - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Quick-Start Flows</h1>
+    <p class="page-description">Guided step-by-step flows for common operator tasks</p>
+</div>
+
+{# Quick-Start Flow Cards #}
+<div class="quickstart-grid">
+    {% for flow in flows %}
+    <div class="quickstart-card card">
+        <div class="card-header">
+            <div class="flow-icon">
+                {% if flow.icon == 'lightbulb' %}&#128161;{% endif %}
+                {% if flow.icon == 'search' %}&#128270;{% endif %}
+                {% if flow.icon == 'bell' %}&#128276;{% endif %}
+                {% if flow.icon == 'check-circle' %}&#9989;{% endif %}
+                {% if flow.icon == 'activity' %}&#128200;{% endif %}
+                {% if flow.icon == 'play' %}&#9654;{% endif %}
+            </div>
+            <div class="flow-header-text">
+                <h3>{{ flow.name }}</h3>
+                <p class="flow-description">{{ flow.description }}</p>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="flow-meta">
+                <span class="meta-item">
+                    <strong>Est. Time:</strong> {{ flow.estimated_time }}
+                </span>
+                {% if flow.requires_credentials %}
+                <span class="meta-item credential-required">
+                    Requires Credentials
+                </span>
+                {% endif %}
+            </div>
+
+            <div class="flow-steps">
+                <h4>Steps:</h4>
+                <ol class="step-list compact">
+                    {% for step in flow.steps %}
+                    <li class="step-item">
+                        {% if step.route %}
+                        <a href="{{ step.route }}">{{ step.name }}</a>
+                        {% else %}
+                        {{ step.name }}
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+        <div class="card-footer">
+            {% if flow.template_id %}
+            <a href="{{ url_for('template_detail', template_id=flow.template_id) }}" class="btn btn-secondary">View Template</a>
+            {% endif %}
+            {% if flow.steps and flow.steps[0].route %}
+            <a href="{{ flow.steps[0].route }}" class="btn btn-primary">Start Flow</a>
+            {% else %}
+            <a href="{{ url_for('home') }}" class="btn btn-primary">Get Started</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# First-Run Recommendation #}
+<div class="first-run-section card">
+    <div class="card-header">
+        <h3>First-Run Recommended Sequence</h3>
+    </div>
+    <div class="card-body">
+        <p class="intro-text">
+            New to Project Alpha? Follow this sequence to get up and running safely:
+        </p>
+
+        <ol class="recommended-sequence">
+            <li class="sequence-step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>Check System Readiness</h4>
+                    <p>Verify all components are operational.</p>
+                    <a href="{{ url_for('readiness') }}" class="btn btn-sm btn-secondary">Go to Readiness</a>
+                </div>
+            </li>
+            <li class="sequence-step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>Complete Setup Checklist</h4>
+                    <p>Configure credentials and review first-use settings.</p>
+                    <a href="{{ url_for('setup') }}" class="btn btn-sm btn-secondary">Go to Setup</a>
+                </div>
+            </li>
+            <li class="sequence-step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>Run Connector Health Check</h4>
+                    <p>Verify external service connections (dry-run safe).</p>
+                    <a href="{{ url_for('template_detail', template_id='connector_health') }}" class="btn btn-sm btn-secondary">Health Check Template</a>
+                </div>
+            </li>
+            <li class="sequence-step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h4>Submit First Discovery</h4>
+                    <p>Enter a test business idea to see the pipeline.</p>
+                    <a href="{{ url_for('discovery') }}" class="btn btn-sm btn-secondary">Go to Discovery</a>
+                </div>
+            </li>
+            <li class="sequence-step">
+                <div class="step-number">5</div>
+                <div class="step-content">
+                    <h4>Review Dashboard</h4>
+                    <p>Familiarize yourself with the main operator view.</p>
+                    <a href="{{ url_for('home') }}" class="btn btn-sm btn-secondary">Go to Dashboard</a>
+                </div>
+            </li>
+        </ol>
+    </div>
+</div>
+
+{# Learn More Section #}
+<div class="learn-more-section card">
+    <div class="card-body">
+        <h3>Learn More</h3>
+        <div class="learn-links">
+            <a href="{{ url_for('playbook') }}" class="learn-link">
+                <strong>Operator Playbook</strong>
+                <span>Complete reference guide for daily operations</span>
+            </a>
+            <a href="{{ url_for('templates_browse') }}" class="learn-link">
+                <strong>Browse Templates</strong>
+                <span>View all available workflow templates</span>
+            </a>
+            <a href="{{ url_for('scenarios') }}" class="learn-link">
+                <strong>Scenarios</strong>
+                <span>Run end-to-end scenario workflows</span>
+            </a>
+            <a href="{{ url_for('recovery_dashboard') }}" class="learn-link">
+                <strong>Recovery Dashboard</strong>
+                <span>Handle blocked and paused workflows</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

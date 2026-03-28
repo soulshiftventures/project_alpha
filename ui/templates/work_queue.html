@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Work Queue - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Work Queue</h1>
+    <p class="subtitle">All items needing operator attention</p>
+</div>
+
+{# Filter Bar #}
+<div class="filter-bar">
+    <span class="filter-label">Filter:</span>
+    <a href="{{ url_for('work_queue') }}" class="filter-btn {{ 'active' if not filter_type else '' }}">All ({{ queue|length }})</a>
+    <a href="{{ url_for('work_queue', type='approval') }}" class="filter-btn {{ 'active' if filter_type == 'approval' else '' }}">Approvals ({{ counts.approvals }})</a>
+    <a href="{{ url_for('work_queue', type='scenario') }}" class="filter-btn {{ 'active' if filter_type == 'scenario' else '' }}">Paused ({{ counts.paused }})</a>
+    <a href="{{ url_for('work_queue', type='job') }}" class="filter-btn {{ 'active' if filter_type == 'job' else '' }}">Failed ({{ counts.failed }})</a>
+    <a href="{{ url_for('work_queue', type='blocker') }}" class="filter-btn {{ 'active' if filter_type == 'blocker' else '' }}">Blocked ({{ counts.blocked }})</a>
+</div>
+
+{# Work Queue List #}
+{% if queue %}
+<div class="work-queue-list">
+    {% for item in queue %}
+    <div class="work-queue-item {{ item.queue_type }} {{ item.priority }}">
+        <div class="wq-header">
+            <span class="wq-type-badge {{ item.queue_type }}">{{ item.category }}</span>
+            <span class="wq-priority-badge {{ item.priority }}">{{ item.priority|title }}</span>
+            <span class="wq-id">{{ item.id[:12] }}...</span>
+        </div>
+
+        <div class="wq-body">
+            <h3 class="wq-title">{{ item.title }}</h3>
+
+            {# Context Details #}
+            <div class="wq-context">
+                {% if item.queue_type == 'approval' %}
+                    {% if item.context.connector %}
+                    <span class="wq-detail"><strong>Connector:</strong> {{ item.context.connector }}</span>
+                    {% endif %}
+                    {% if item.context.operation %}
+                    <span class="wq-detail"><strong>Operation:</strong> {{ item.context.operation }}</span>
+                    {% endif %}
+                    {% if item.context.risk_level %}
+                    <span class="wq-detail"><strong>Risk:</strong> <span class="risk-badge {{ item.context.risk_level }}">{{ item.context.risk_level }}</span></span>
+                    {% endif %}
+                {% elif item.queue_type == 'scenario' %}
+                    <span class="wq-detail"><strong>Progress:</strong> {{ item.context.steps_completed }}/{{ item.context.total_steps }} steps</span>
+                    {% if item.context.blockers %}
+                    <span class="wq-detail"><strong>Blockers:</strong> {{ item.context.blockers|length }}</span>
+                    {% endif %}
+                {% elif item.queue_type == 'job' %}
+                    {% if item.context.error %}
+                    <span class="wq-detail wq-error"><strong>Error:</strong> {{ item.context.error[:80] }}...</span>
+                    {% endif %}
+                    <span class="wq-detail"><strong>Retries:</strong> {{ item.context.retry_count }}</span>
+                {% elif item.queue_type == 'blocker' %}
+                    <span class="wq-detail"><strong>Type:</strong> {{ item.context.blocker_type }}</span>
+                    {% if item.context.resolution_hint %}
+                    <span class="wq-detail wq-hint"><strong>Hint:</strong> {{ item.context.resolution_hint }}</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            {# Next Step Guidance #}
+            {% set guidance = get_guidance(item) %}
+            {% if guidance.recommendation %}
+            <div class="wq-guidance">
+                <span class="guidance-label">Recommended:</span>
+                <span class="guidance-text">{{ guidance.recommendation }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="wq-actions">
+            {# Primary Action #}
+            {% if guidance.primary_action %}
+            <form method="POST" action="{{ url_for('work_queue_action', item_id=item.id) }}" class="wq-form">
+                <input type="hidden" name="action" value="{{ guidance.primary_action.action }}">
+                <input type="hidden" name="queue_type" value="{{ item.queue_type }}">
+                <button type="submit" class="btn btn-primary">{{ guidance.primary_action.label }}</button>
+            </form>
+            {% endif %}
+
+            {# Secondary Actions #}
+            {% for sec_action in guidance.secondary_actions %}
+            <form method="POST" action="{{ url_for('work_queue_action', item_id=item.id) }}" class="wq-form">
+                <input type="hidden" name="action" value="{{ sec_action.action }}">
+                <input type="hidden" name="queue_type" value="{{ item.queue_type }}">
+                <button type="submit" class="btn btn-secondary btn-small">{{ sec_action.label }}</button>
+            </form>
+            {% endfor %}
+
+            {# View Detail Link #}
+            {% if item.queue_type == 'approval' %}
+            <a href="{{ url_for('approval_detail', record_id=item.id) }}" class="btn btn-secondary btn-small">Details</a>
+            {% elif item.queue_type == 'scenario' %}
+            <a href="{{ url_for('scenario_run_detail', run_id=item.id) }}" class="btn btn-secondary btn-small">Details</a>
+            {% elif item.queue_type == 'job' %}
+            <a href="{{ url_for('job_detail', job_id=item.id) }}" class="btn btn-secondary btn-small">Details</a>
+            {% endif %}
+        </div>
+
+        <div class="wq-footer">
+            <span class="wq-time">Created: {{ item.created_at }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state-large">
+    <div class="success-icon-large">✓</div>
+    <h3>Work Queue Clear</h3>
+    <p>No items currently need your attention.</p>
+    <div class="empty-state-actions">
+        <a href="{{ url_for('discovery') }}" class="btn btn-primary">Start Discovery</a>
+        <a href="{{ url_for('scenarios') }}" class="btn btn-secondary">Run Scenario</a>
+    </div>
+</div>
+{% endif %}
+
+{# Quick Stats #}
+<section class="panel">
+    <h2>Queue Summary</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Pending Approvals</span>
+            <span class="stat-value">{{ counts.approvals }}</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Paused Scenarios</span>
+            <span class="stat-value">{{ counts.paused }}</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Failed Jobs</span>
+            <span class="stat-value">{{ counts.failed }}</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Active Blockers</span>
+            <span class="stat-value">{{ counts.blocked }}</span>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Discover Opportunities - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Discover Opportunities</h1>
+    <p class="subtitle">Find problems worth solving through market-driven research</p>
+</div>
+
+{# Discovery Modes #}
+<section class="discovery-modes">
+    <h2>How do you want to discover opportunities?</h2>
+    <div class="discovery-mode-grid">
+        <div class="discovery-mode-card">
+            <div class="mode-icon">🔍</div>
+            <h3>Market Pain-Point Scan</h3>
+            <p>Research emerging pain points in specific markets or industries</p>
+            <form method="post" action="{{ url_for('discover_scan_market') }}">
+                <div class="form-group">
+                    <input type="text" name="market_theme" placeholder="e.g., SaaS, FinTech, E-commerce" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Scan Market</button>
+            </form>
+        </div>
+
+        <div class="discovery-mode-card">
+            <div class="mode-icon">💡</div>
+            <h3>Problem Exploration</h3>
+            <p>Explore a specific problem domain to find opportunity angles</p>
+            <form method="post" action="{{ url_for('discover_explore_problem') }}">
+                <div class="form-group">
+                    <textarea name="problem_statement" rows="3" placeholder="Describe a problem area you're curious about..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Explore Problem</button>
+            </form>
+        </div>
+
+        <div class="discovery-mode-card">
+            <div class="mode-icon">🏭</div>
+            <h3>Industry Scan</h3>
+            <p>Scan a specific industry for workflow and data opportunities</p>
+            <form method="post" action="{{ url_for('discover_scan_industry') }}">
+                <div class="form-group">
+                    <input type="text" name="industry" placeholder="e.g., Healthcare, Real Estate, Construction" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Scan Industry</button>
+            </form>
+        </div>
+
+        <div class="discovery-mode-card">
+            <div class="mode-icon">🎯</div>
+            <h3>Theme-Based Discovery</h3>
+            <p>Generate opportunity candidates from broad business themes</p>
+            <form method="post" action="{{ url_for('discover_from_theme') }}">
+                <div class="form-group">
+                    <input type="text" name="theme" placeholder="e.g., Automation, Cost reduction, Developer tools" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Generate Candidates</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+{# Recent Discovery Runs #}
+<section class="panel">
+    <h2>Recent Discovery Scans</h2>
+    {% if recent_discoveries %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Mode</th>
+                <th>Input</th>
+                <th>Candidates</th>
+                <th>Converted</th>
+                <th>Archived</th>
+                <th>Scan Time</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for discovery in recent_discoveries %}
+            <tr>
+                <td><span class="status-badge">{{ discovery.mode }}</span></td>
+                <td>{{ discovery.input_summary|truncate(50) }}</td>
+                <td>{{ discovery.total_candidates }}</td>
+                <td>
+                    {% if discovery.converted_count and discovery.converted_count > 0 %}
+                        <span class="status-badge status-success">{{ discovery.converted_count }}</span>
+                    {% else %}
+                        <span class="text-muted">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if discovery.archived_count and discovery.archived_count > 0 %}
+                        <span class="text-muted">{{ discovery.archived_count }}</span>
+                    {% else %}
+                        <span class="text-muted">0</span>
+                    {% endif %}
+                </td>
+                <td>{{ discovery.scan_timestamp[:19] }}</td>
+                <td>
+                    <a href="{{ url_for('discover_result', scan_id=discovery.scan_id) }}" class="btn btn-small">View Results</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state-large">
+        <p>No discovery scans yet. Choose a discovery mode above to get started.</p>
+    </div>
+    {% endif %}
+</section>
+
+{# Quick Tips #}
+<section class="panel panel-info">
+    <h2>💡 Discovery Tips</h2>
+    <ul class="tips-list">
+        <li><strong>Start broad:</strong> Market scans work best with general themes (e.g., "SaaS productivity tools" rather than a specific product)</li>
+        <li><strong>Be specific about pain:</strong> When exploring problems, describe the who/what/why clearly</li>
+        <li><strong>Iterate:</strong> Discovery is iterative - scan multiple themes and compare opportunity quality</li>
+        <li><strong>Validate early:</strong> Once you have candidates, run validation scenarios before deep commitment</li>
+    </ul>
+</section>
+
+{% endblock %}

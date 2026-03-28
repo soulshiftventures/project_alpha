@@ -14,15 +14,83 @@
 # Navigate to project
 cd /Users/krissanders/Desktop/project_alpha_working
 
-# Run the system (one command)
-./run.sh "your business idea"
+# Full startup with readiness check
+./run_full.sh
 
-# Verify everything works (one command)
+# Check system readiness
+./check_ready.sh
+
+# Start UI only
+./run_ui.sh
+
+# Verify everything works
 ./verify.sh
 ```
 
 **Note:** This project runs in **simulator mode** by default. No API keys are required.
 The built-in simulator handles all AI-related operations for testing and development.
+
+## Deployment & First-Use Setup
+
+### Readiness Check
+
+Before running the system, verify readiness:
+
+```bash
+# Full readiness check
+./check_ready.sh
+
+# Quick check
+./check_ready.sh --quick
+
+# Include health status
+./check_ready.sh --health
+
+# JSON output (for automation)
+./check_ready.sh --json
+```
+
+### Startup Modes
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| **Full Startup** | `./run_full.sh` | Check readiness, initialize, start UI |
+| **UI Only** | `./run_ui.sh` | Start operator interface only |
+| **Skip Checks** | `./run_full.sh --skip-check` | Start without readiness check |
+| **Debug Mode** | `./run_full.sh --debug` | Start with Flask debug mode |
+
+### First-Use Checklist
+
+1. **Create data directory:** `mkdir -p project_alpha/data`
+2. **Copy environment template:** `cp .env.example .env`
+3. **Configure credentials:** Edit `.env` with your API keys
+4. **Install dependencies:** `pip install flask httpx`
+5. **Run system:** `./run_full.sh`
+
+### Key URLs
+
+| URL | Purpose |
+|-----|---------|
+| http://localhost:5000 | Home - Outcome-Oriented Dashboard |
+| http://localhost:5000/discover | **Discover - Market Discovery with Persistence & Enrichment** |
+| http://localhost:5000/work-queue | Work - Unified Work Queue |
+| http://localhost:5000/approvals | Approvals - Review Pending Actions |
+| http://localhost:5000/events | History - Event Log |
+| http://localhost:5000/admin | Admin - System Internals & Configuration |
+
+### Dry-Run vs Live Mode
+
+- **Dry-Run Mode:** Always available, no credentials required
+- **Live Mode:** Requires credentials per connector
+
+| Connector | Credentials Required | Live-Capable |
+|-----------|---------------------|--------------|
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Yes |
+| Tavily | `TAVILY_API_KEY` | Yes |
+| SendGrid | `SENDGRID_API_KEY` | Yes |
+| HubSpot | `HUBSPOT_API_KEY` | Yes |
+| Firecrawl | `FIRECRAWL_API_KEY` | Yes |
+| Apollo | `APOLLO_API_KEY` | Placeholder |
 
 ## Alternative Commands
 
@@ -32,6 +100,9 @@ python3 scripts/verify_system.py
 
 # Run test suite only
 python3 -m pytest tests/ -v
+
+# Run readiness check programmatically
+PYTHONPATH=. python3 -c "from core.readiness_checker import check_readiness; print(check_readiness().to_dict())"
 ```
 
 ## Overview
@@ -623,19 +694,67 @@ Opportunities marked "pursue" can flow into the execution system:
 ```bash
 # UI Interface
 ./run_ui.sh
-# Visit http://localhost:5000/discovery
-# Submit rough idea → Get evaluated opportunities → Mark "pursue" → Feed into execution
+# Visit http://localhost:5000/discover
+# Run discovery scans → View candidates → Convert to opportunities
 
-# Programmatic Interface
-from core.discovery_pipeline import process_discovery_input
-from core.discovery_models import OperatorConstraints
+# Programmatic Interface with Live External Enrichment
+from core.market_discovery import MarketDiscoveryEngine, DiscoveryInput
 
-constraints = OperatorConstraints(max_initial_capital=5000)
-opportunities = process_discovery_input(
-    raw_text="Build a tool for small business invoicing",
-    constraints=constraints
+engine = MarketDiscoveryEngine(enable_external_enrichment=True)
+discovery_input = DiscoveryInput(
+    mode="theme_scan",
+    theme="AI automation for small businesses"
 )
+
+# Run discovery with external market validation (requires Tavily/Firecrawl credentials)
+result = engine.run_discovery(discovery_input, enrich=True)
+
+# Check enrichment evidence
+for candidate in result.candidates:
+    if candidate.enrichment and candidate.enrichment["enriched"]:
+        print(f"Candidate '{candidate.title}' enriched via {candidate.enrichment['signal_source']}")
+        for evidence in candidate.enrichment["evidence"]:
+            print(f"  - {evidence['source_type']}: {evidence['supporting_notes']}")
 ```
+
+### Live External Enrichment
+
+**Sprint: Live External Enrichment Integration**
+
+Discovery candidates can now be enriched with real external market signals via Tavily and Firecrawl connectors.
+
+**How it Works:**
+1. Discovery scan runs and generates candidates using internal heuristics
+2. If `enrich=True` and credentials are available, candidates are enriched with external signals
+3. Tavily searches validate market demand and interest
+4. Firecrawl scrapes industry sources for problem validation
+5. Enrichment evidence is persisted with confidence adjustments
+
+**Enrichment States:**
+- `live_success` - External API executed successfully, signals obtained
+- `credentials_missing` - Connector available but credentials not configured
+- `live_failed` - External API call failed (e.g., rate limit, timeout)
+- `skipped` - Enrichment attempted but no suitable data source
+- `disabled` - Enrichment not requested
+- `error` - Unexpected error during enrichment
+
+**Safe Fallback:**
+- If enrichment cannot run, discovery still works with internal signals only
+- No external data is fabricated
+- Clear evidence tracking shows what came from internal vs external sources
+
+**Governance:**
+- All credential gating remains intact
+- Approval workflows still apply where configured
+- Cost tracking includes external enrichment costs
+- No secrets leaked in evidence or references
+
+**UI Display:**
+Enrichment evidence shown in discovery results including:
+- Signal source (internal, hybrid, external_tavily, external_firecrawl)
+- Enrichment status with visual badges
+- Evidence items with signal strength, notes, and safe external references
+- Confidence adjustments from external signals
 
 ### Discovery Modules
 
@@ -838,4 +957,232 @@ The system now supports additional live-capable connector actions under the exis
 - SendGrid send_email: Requires standard approval (external notification)
 - HubSpot create/update: Requires standard approval (CRM writes)
 - Firecrawl scrape: No approval required (research operation)
+
+### Recovery & Workflow Control (Sprint 19)
+
+The system now provides complete operator recovery and workflow control capabilities for managing paused, blocked, and failed executions.
+
+**New Modules:**
+
+| Module | Purpose |
+|--------|---------|
+| `core/recovery_manager.py` | Central orchestration for resume, retry, rerun operations |
+| `core/operator_actions.py` | Unified operator action interface with audit trail |
+
+**Recovery Operations:**
+
+| Operation | Description | Use Case |
+|-----------|-------------|----------|
+| **Resume** | Continue paused scenario from where it stopped | After approval granted |
+| **Retry** | Re-attempt failed job/step/connector action | Transient failures |
+| **Rerun** | Create fresh execution from plan/scenario | Start over with fixes |
+| **Skip** | Continue scenario while skipping failed step | Non-critical failures |
+| **Cancel** | Terminate running/paused scenario | Abort workflow |
+
+**Blocker Visibility System:**
+
+The system tracks what's blocking workflow progress:
+
+| Blocker Type | Description | Resolution Action |
+|--------------|-------------|-------------------|
+| `approval_required` | Waiting for operator approval | Approve/deny request |
+| `missing_credential` | Required credential not available | Add credential |
+| `policy_blocked` | Policy rule prevents action | Modify policy or request |
+| `budget_blocked` | Cost exceeds budget limits | Increase budget or modify request |
+| `capacity_blocked` | System at capacity | Wait or scale resources |
+| `runtime_unavailable` | Execution backend unavailable | Wait or switch backend |
+| `live_mode_not_granted` | Action requires live mode approval | Grant live mode |
+| `step_failed` | Scenario step execution failed | Retry, skip, or fix |
+| `connector_failed` | Connector action failed | Retry or investigate |
+
+**New UI Views:**
+
+| Route | Description |
+|-------|-------------|
+| `/recovery` | Recovery dashboard with all pending items |
+| `/recovery/paused` | Scenarios awaiting action |
+| `/recovery/failed` | Failed jobs and actions |
+| `/recovery/blockers` | Active blockers across all workflows |
+| `/recovery/history` | Recovery action history |
+
+**New API Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/recovery/dashboard` | GET | Full recovery dashboard data |
+| `/api/recovery/paused` | GET | Paused scenarios list |
+| `/api/recovery/failed` | GET | Failed jobs list |
+| `/api/recovery/blockers` | GET | Active blockers list |
+| `/api/recovery/workflow-status` | GET | Workflow status for scenario/job |
+| `/api/recovery/resume/scenario/<run_id>` | POST | Resume paused scenario |
+| `/api/recovery/resume/approval/<approval_id>` | POST | Resume after approval |
+| `/api/recovery/retry/job/<job_id>` | POST | Retry failed job |
+| `/api/recovery/retry/connector/<execution_id>` | POST | Retry connector action |
+| `/api/recovery/retry/step/<run_id>/<step_id>` | POST | Retry scenario step |
+| `/api/recovery/rerun/plan/<plan_id>` | POST | Rerun execution plan |
+| `/api/recovery/rerun/scenario/<run_id>` | POST | Rerun scenario |
+| `/api/recovery/skip/step/<run_id>/<step_id>` | POST | Skip failed step |
+| `/api/recovery/cancel/scenario/<run_id>` | POST | Cancel scenario |
+| `/api/approvals/<id>/approve-with-resume` | POST | Approve and auto-resume |
+| `/api/recovery/history` | GET | Recovery action history |
+
+**Approval-to-Resume Flow:**
+
+The system supports automatic workflow resumption after approval:
+
+```
+Scenario runs → Hits approval gate → Pauses with AWAITING_APPROVAL status
+    ↓
+Operator reviews in /approvals
+    ↓
+Operator approves with "auto_resume=true"
+    ↓
+System automatically resumes scenario from paused step
+    ↓
+Scenario continues execution
+```
+
+**Audit Trail:**
+
+All recovery operations preserve full audit trail:
+- Each resume/retry/rerun creates new records (never overwrites)
+- Original failed/paused records preserved for history
+- Operator ID and timestamp recorded for all actions
+- Action history queryable via API and UI
+
+**Access:** Visit `/recovery` in the operator UI to view and manage blocked workflows.
+
+### Daily Operator Activation (Sprint 20)
+
+The system now provides a streamlined daily operator experience with clear "what do I do next?" guidance and unified work queue.
+
+**Enhanced Dashboard:**
+
+The home dashboard now shows:
+- **Attention Banner** - Quick visibility into items needing attention
+- **Quick Action Cards** - One-click access to common operator tasks
+- **Status Summary** - System health, active jobs, pending approvals, budget status
+- **Needs Attention List** - Items requiring immediate operator action with guidance
+- **Recent Activity** - Latest operator actions and system events
+
+**Unified Work Queue:**
+
+New `/work-queue` route combines all items needing attention into a single prioritized list:
+
+| Queue Type | Source | Actions Available |
+|------------|--------|-------------------|
+| Pending Approvals | Approval workflow | Approve, Deny |
+| Paused Scenarios | Scenario execution | Resume, Retry, Cancel |
+| Failed Jobs | Job execution | Retry, Rerun Plan |
+| Active Blockers | Various sources | Resolve, Skip |
+
+**Next-Step Guidance:**
+
+Each work queue item includes actionable guidance:
+- **Recommendation** - Plain-language explanation of the situation
+- **Primary Action** - Most likely resolution action
+- **Secondary Actions** - Alternative actions if primary isn't suitable
+- **Context** - Relevant details (risk level, retry count, timestamps)
+
+**Navigation Improvements:**
+
+- Dashboard link renamed for clarity
+- Work Queue link prominently placed with attention badge
+- Navigation organized by function (Operator Actions, Workflows, Resources, System)
+- Visual dividers between navigation sections
+
+**New Routes:**
+
+| Route | Description |
+|-------|-------------|
+| `/work-queue` | Unified work queue view |
+| `/work-queue/action/<id>` | Handle work queue item action |
+| `/api/work-queue` | API: Get unified queue |
+| `/api/attention-summary` | API: Get attention counts |
+| `/api/quick-counts` | API: Get quick action counts |
+
+**Service Layer Helpers:**
+
+| Function | Purpose |
+|----------|---------|
+| `get_attention_summary()` | Aggregate all items needing attention |
+| `get_unified_work_queue()` | Combine and prioritize queue items |
+| `get_next_step_guidance()` | Generate actionable recommendations |
+| `get_quick_action_counts()` | Count items by category |
+| `get_operator_home_data()` | All dashboard data in one call |
+
+**Access:** Visit `/` for the enhanced dashboard or `/work-queue` for the unified work queue.
+
+### Operator Playbook & First-Run Templates (Sprint 21)
+
+The system now provides guided onboarding with operator playbook, reusable workflow templates, and quick-start flows for common tasks.
+
+**Operator Playbook:**
+
+The playbook (`/playbook`) provides comprehensive operator guidance:
+- **Getting Started** - First-time setup and system startup
+- **Daily Workflow** - Morning checklist and routine tasks
+- **Common Workflows** - Step-by-step guides for frequent operations
+- **Dry-Run vs Live Mode** - Understanding execution modes
+- **Recovery Procedures** - Handling errors and blocked workflows
+- **Safety Guidelines** - Best practices and emergency procedures
+
+**Workflow Templates:**
+
+The template registry (`/templates`) provides reusable workflow definitions:
+
+| Template | Category | Mode | Purpose |
+|----------|----------|------|---------|
+| `discovery_intake` | Discovery | Dry-Run | Submit new business ideas |
+| `validation_first` | Research | Live-Capable | Validate opportunities before committing |
+| `research_scenario` | Research | Live-Capable | Run market/competitor research |
+| `notification_test` | Notification | Live-Capable | Test notification delivery |
+| `crm_update` | CRM | Live-Capable | Create/update CRM contacts |
+| `connector_health` | Maintenance | Read-Only | Check connector status |
+
+**Quick-Start Flows:**
+
+The quick-start page (`/quickstart`) provides guided step-by-step flows:
+- **Start Discovery** - Submit first business idea
+- **Run Research Scenario** - Execute research queries
+- **Send Test Notification** - Test delivery channels
+- **Review Approvals** - Process pending requests
+- **Inspect Connector Health** - Verify external services
+- **Resume Paused Work** - Handle blocked workflows
+
+**First-Run Recommended Sequence:**
+
+1. Check system readiness (`/readiness`)
+2. Complete setup checklist (`/setup`)
+3. Run connector health check (template)
+4. Submit first discovery (`/discovery`)
+5. Review dashboard (`/`)
+
+**New Routes:**
+
+| Route | Description |
+|-------|-------------|
+| `/playbook` | Operator playbook guide |
+| `/quickstart` | Quick-start flows |
+| `/templates` | Browse workflow templates |
+| `/templates/<id>` | Template detail and launch |
+| `/api/playbook` | API: Get playbook content |
+| `/api/quickstart` | API: Get quick-start flows |
+| `/api/templates` | API: List templates |
+| `/api/templates/<id>` | API: Get template detail |
+| `/api/templates/<id>/launch` | API: Launch template |
+| `/api/templates/launches` | API: List template launches |
+
+**Template Registry Module:**
+
+| Class/Function | Purpose |
+|----------------|---------|
+| `TemplateRegistry` | Central registry for workflow templates |
+| `WorkflowTemplate` | Template definition with inputs, steps, metadata |
+| `TemplateInput` | Input field definition (text, select, etc.) |
+| `TemplateStep` | Execution step with action type and parameters |
+| `TemplateLaunch` | Record of template execution |
+| `get_template_registry()` | Get singleton registry instance |
+
+**Access:** Visit `/playbook` for operator guidance, `/templates` to browse templates, or `/quickstart` for guided flows.
 

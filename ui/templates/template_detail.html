@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}{{ template.name }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <nav class="breadcrumb">
+        <a href="{{ url_for('templates_browse') }}">Templates</a> &raquo;
+        <span>{{ template.name }}</span>
+    </nav>
+    <h1>{{ template.name }}</h1>
+    <p class="page-description">{{ template.description }}</p>
+</div>
+
+{# Template Overview #}
+<div class="template-overview">
+    <div class="overview-row">
+        <div class="overview-card card">
+            <div class="card-header">
+                <h3>Template Info</h3>
+            </div>
+            <div class="card-body">
+                <dl class="info-list">
+                    <dt>Category</dt>
+                    <dd><span class="badge badge-{{ template.category }}">{{ template.category|title }}</span></dd>
+
+                    <dt>Execution Mode</dt>
+                    <dd>
+                        {% if template.mode == 'dry_run_only' %}
+                        <span class="badge badge-dry-run">Dry-Run Only</span>
+                        <p class="help-text">This template only simulates actions - no external calls are made.</p>
+                        {% elif template.mode == 'live_capable' %}
+                        <span class="badge badge-live">Live Capable</span>
+                        <p class="help-text">This template can run in dry-run mode or execute real actions.</p>
+                        {% else %}
+                        <span class="badge badge-readonly">Read Only</span>
+                        <p class="help-text">This template only reads data - no modifications are made.</p>
+                        {% endif %}
+                    </dd>
+
+                    <dt>Complexity</dt>
+                    <dd><span class="badge badge-complexity-{{ template.complexity }}">{{ template.complexity|title }}</span></dd>
+
+                    <dt>Estimated Duration</dt>
+                    <dd>{{ template.estimated_duration }}</dd>
+
+                    <dt>Version</dt>
+                    <dd>{{ template.version }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="prerequisites-card card">
+            <div class="card-header">
+                <h3>Prerequisites</h3>
+            </div>
+            <div class="card-body">
+                {% if template.prerequisites %}
+                <ul class="prereq-list">
+                    {% for prereq in template.prerequisites %}
+                    <li>{{ prereq }}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="no-prereq">No prerequisites required.</p>
+                {% endif %}
+
+                {% if template.requires_live_credentials %}
+                <div class="credential-warning">
+                    <strong>Note:</strong> Live mode requires configured credentials.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Inputs Section #}
+<div class="template-inputs card">
+    <div class="card-header">
+        <h3>Inputs ({{ template.inputs|length }})</h3>
+    </div>
+    <div class="card-body">
+        {% if template.inputs %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Default</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for input in template.inputs %}
+                <tr>
+                    <td><code>{{ input.name }}</code></td>
+                    <td>{{ input.input_type }}</td>
+                    <td>{% if input.required %}Yes{% else %}No{% endif %}</td>
+                    <td>{{ input.default_value or '-' }}</td>
+                    <td>{{ input.help_text or input.placeholder or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>This template requires no inputs.</p>
+        {% endif %}
+    </div>
+</div>
+
+{# Steps Section #}
+<div class="template-steps card">
+    <div class="card-header">
+        <h3>Execution Steps ({{ template.steps|length }})</h3>
+    </div>
+    <div class="card-body">
+        <ol class="step-list">
+            {% for step in template.steps %}
+            <li class="step-item">
+                <div class="step-header">
+                    <span class="step-name">{{ step.name }}</span>
+                    <span class="step-type badge">{{ step.action_type }}</span>
+                    {% if step.requires_approval %}
+                    <span class="badge badge-warning">Requires Approval</span>
+                    {% endif %}
+                    {% if step.skip_on_dry_run %}
+                    <span class="badge badge-info">Skipped in Dry-Run</span>
+                    {% endif %}
+                </div>
+                <p class="step-description">{{ step.description }}</p>
+                {% if step.connector %}
+                <div class="step-connector">
+                    <strong>Connector:</strong> {{ step.connector }} / {{ step.operation }}
+                </div>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+    </div>
+</div>
+
+{# Tags #}
+{% if template.tags %}
+<div class="template-tags">
+    <strong>Tags:</strong>
+    {% for tag in template.tags %}
+    <span class="tag">{{ tag }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# Launch Form #}
+<div class="template-launch card">
+    <div class="card-header">
+        <h3>Launch Template</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('template_launch', template_id=template.template_id) }}" class="launch-form">
+            {% for input in template.inputs %}
+            <div class="form-group">
+                <label for="input-{{ input.name }}">
+                    {{ input.label }}
+                    {% if input.required %}<span class="required">*</span>{% endif %}
+                </label>
+
+                {% if input.input_type == 'textarea' %}
+                <textarea name="{{ input.name }}" id="input-{{ input.name }}"
+                          placeholder="{{ input.placeholder }}"
+                          {% if input.required %}required{% endif %}>{{ input.default_value }}</textarea>
+                {% elif input.input_type == 'select' %}
+                <select name="{{ input.name }}" id="input-{{ input.name }}"
+                        {% if input.required %}required{% endif %}>
+                    {% for option in input.options %}
+                    <option value="{{ option }}" {% if option == input.default_value %}selected{% endif %}>
+                        {{ option|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% elif input.input_type == 'number' %}
+                <input type="number" name="{{ input.name }}" id="input-{{ input.name }}"
+                       value="{{ input.default_value }}"
+                       placeholder="{{ input.placeholder }}"
+                       {% if input.required %}required{% endif %}>
+                {% else %}
+                <input type="{{ input.input_type }}" name="{{ input.name }}" id="input-{{ input.name }}"
+                       value="{{ input.default_value }}"
+                       placeholder="{{ input.placeholder }}"
+                       {% if input.required %}required{% endif %}>
+                {% endif %}
+
+                {% if input.help_text %}
+                <small class="help-text">{{ input.help_text }}</small>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            <div class="form-group">
+                <label for="dry_run">Execution Mode</label>
+                <select name="dry_run" id="dry_run">
+                    <option value="true" selected>Dry-Run (Safe)</option>
+                    {% if template.mode != 'dry_run_only' %}
+                    <option value="false">Live (Real Execution)</option>
+                    {% endif %}
+                </select>
+                <small class="help-text">
+                    {% if template.mode == 'dry_run_only' %}
+                    This template only supports dry-run mode.
+                    {% else %}
+                    Dry-run simulates actions; Live mode executes real actions.
+                    {% endif %}
+                </small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Launch Template</button>
+                <a href="{{ url_for('templates_browse') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

@@ -56,6 +56,7 @@ class RecordType(Enum):
     BUDGET_SNAPSHOT = "budget_snapshot"
     OPPORTUNITY = "opportunity"
     HANDOFF = "handoff"
+    DISCOVERY_SCAN = "discovery_scan"
 
 
 SCHEMA_VERSION = 1
@@ -340,6 +341,21 @@ CREATE TABLE IF NOT EXISTS scenario_runs (
     handoff_id TEXT
 );
 
+-- Discovery Scans (Market Discovery Engine)
+CREATE TABLE IF NOT EXISTS discovery_scans (
+    scan_id TEXT PRIMARY KEY,
+    mode TEXT NOT NULL,
+    input_summary TEXT NOT NULL,
+    candidates_json TEXT NOT NULL,
+    total_candidates INTEGER DEFAULT 0,
+    scan_timestamp TEXT NOT NULL,
+    metadata_json TEXT,
+    converted_count INTEGER DEFAULT 0,
+    archived_count INTEGER DEFAULT 0,
+    ignored_count INTEGER DEFAULT 0,
+    enriched INTEGER DEFAULT 0
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 CREATE INDEX IF NOT EXISTS idx_approvals_created ON approvals(created_at);
@@ -362,6 +378,8 @@ CREATE INDEX IF NOT EXISTS idx_capacity_decisions_decision ON capacity_decisions
 CREATE INDEX IF NOT EXISTS idx_scenario_runs_scenario ON scenario_runs(scenario_id);
 CREATE INDEX IF NOT EXISTS idx_scenario_runs_status ON scenario_runs(status);
 CREATE INDEX IF NOT EXISTS idx_scenario_runs_started ON scenario_runs(started_at);
+CREATE INDEX IF NOT EXISTS idx_discovery_scans_mode ON discovery_scans(mode);
+CREATE INDEX IF NOT EXISTS idx_discovery_scans_timestamp ON discovery_scans(scan_timestamp);
 """
 
 
@@ -1662,6 +1680,117 @@ class StateStore:
                 return {}
 
     # =========================================================================
+    # DISCOVERY SCAN OPERATIONS
+    # =========================================================================
+
+    def save_discovery_scan(self, scan: Dict[str, Any]) -> bool:
+        """Save or update a discovery scan record."""
+        if not self._initialized:
+            return False
+
+        with self._lock:
+            try:
+                self._conn.execute("""
+                    INSERT OR REPLACE INTO discovery_scans (
+                        scan_id, mode, input_summary, candidates_json,
+                        total_candidates, scan_timestamp, metadata_json,
+                        converted_count, archived_count, ignored_count, enriched
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan["scan_id"],
+                    scan["mode"],
+                    scan["input_summary"],
+                    json.dumps(scan["candidates"]),
+                    scan["total_candidates"],
+                    scan["scan_timestamp"],
+                    json.dumps(scan.get("metadata", {})),
+                    scan.get("converted_count", 0),
+                    scan.get("archived_count", 0),
+                    scan.get("ignored_count", 0),
+                    scan.get("enriched", 0),
+                ))
+                return True
+            except Exception as e:
+                logger.error(f"Failed to save discovery scan: {e}")
+                return False
+
+    def get_discovery_scan(self, scan_id: str) -> Optional[Dict[str, Any]]:
+        """Get a discovery scan by ID."""
+        if not self._initialized:
+            return None
+
+        with self._lock:
+            cursor = self._conn.execute(
+                "SELECT * FROM discovery_scans WHERE scan_id = ?",
+                (scan_id,)
+            )
+            row = cursor.fetchone()
+            return self._row_to_dict(row) if row else None
+
+    def list_discovery_scans(
+        self,
+        mode: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List discovery scans with optional filtering."""
+        if not self._initialized:
+            return []
+
+        with self._lock:
+            query = "SELECT * FROM discovery_scans WHERE 1=1"
+            params = []
+
+            if mode:
+                query += " AND mode = ?"
+                params.append(mode)
+
+            query += " ORDER BY scan_timestamp DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = self._conn.execute(query, params)
+            return [self._row_to_dict(row) for row in cursor.fetchall()]
+
+    def update_discovery_scan_counts(
+        self,
+        scan_id: str,
+        converted_count: Optional[int] = None,
+        archived_count: Optional[int] = None,
+        ignored_count: Optional[int] = None,
+    ) -> bool:
+        """Update conversion tracking counts for a discovery scan."""
+        if not self._initialized:
+            return False
+
+        with self._lock:
+            try:
+                updates = []
+                params = []
+
+                if converted_count is not None:
+                    updates.append("converted_count = ?")
+                    params.append(converted_count)
+
+                if archived_count is not None:
+                    updates.append("archived_count = ?")
+                    params.append(archived_count)
+
+                if ignored_count is not None:
+                    updates.append("ignored_count = ?")
+                    params.append(ignored_count)
+
+                if not updates:
+                    return True
+
+                params.append(scan_id)
+                query = f"UPDATE discovery_scans SET {', '.join(updates)} WHERE scan_id = ?"
+
+                self._conn.execute(query, params)
+                return True
+            except Exception as e:
+                logger.error(f"Failed to update discovery scan counts: {e}")
+                return False
+
+    # =========================================================================
 
     def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics."""
@@ -1675,7 +1804,7 @@ class StateStore:
                 "approvals", "jobs", "execution_plans", "live_mode_promotions",
                 "events", "connector_executions", "credential_health",
                 "cost_records", "budget_snapshots", "opportunities", "handoffs",
-                "capacity_limits", "capacity_decisions", "scenario_runs"
+                "capacity_limits", "capacity_decisions", "scenario_runs", "discovery_scans"
             ]
 
             for table in tables:

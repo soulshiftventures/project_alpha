@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Admin & System - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Admin & System</h1>
+    <p class="subtitle">System internals, configuration, and advanced controls</p>
+</div>
+
+{# System Health Overview #}
+<div class="status-grid">
+    <div class="status-card {% if not health.healthy %}status-warning{% endif %}">
+        <h3>System Health</h3>
+        <span class="status-badge {{ 'active' if health.healthy else 'warning' }}">
+            {{ 'Healthy' if health.healthy else 'Degraded' }}
+        </span>
+        <div class="status-detail">
+            {{ health.healthy_subsystems|default(0) }} healthy
+            {% if health.degraded_subsystems|default(0) > 0 %} · {{ health.degraded_subsystems }} degraded{% endif %}
+        </div>
+    </div>
+    <div class="status-card">
+        <h3>Backends</h3>
+        <span class="status-value">{{ backends_count }}</span>
+        <div class="status-detail">{{ backends_active }} active</div>
+    </div>
+    <div class="status-card">
+        <h3>Connectors</h3>
+        <span class="status-value">{{ connectors_count }}</span>
+        <div class="status-detail">{{ connectors_healthy }} healthy</div>
+    </div>
+    <div class="status-card">
+        <h3>Budget Used</h3>
+        <span class="status-value">{{ "%.0f"|format(budget_utilization * 100) }}%</span>
+        <div class="status-detail">${{ "%.2f"|format(total_cost) }} tracked</div>
+    </div>
+</div>
+
+{# Admin Sections #}
+<section class="admin-sections">
+    <h2>Administration Sections</h2>
+    <div class="admin-section-grid">
+        {# System & Infrastructure #}
+        <div class="admin-section-card">
+            <h3>🏥 System Health</h3>
+            <p>Monitor subsystem health, diagnostics, and startup status</p>
+            <div class="admin-links">
+                <a href="{{ url_for('health') }}" class="btn btn-secondary">Health Dashboard</a>
+                <a href="{{ url_for('readiness') }}" class="btn btn-secondary">Readiness Check</a>
+                <a href="{{ url_for('setup') }}" class="btn btn-secondary">Setup Guide</a>
+            </div>
+        </div>
+
+        {# Execution Infrastructure #}
+        <div class="admin-section-card">
+            <h3>⚙️ Execution Backends</h3>
+            <p>Configure and monitor job execution backends</p>
+            <div class="admin-links">
+                <a href="{{ url_for('backends') }}" class="btn btn-secondary">Backends</a>
+                <a href="{{ url_for('capacity') }}" class="btn btn-secondary">Capacity</a>
+                <a href="{{ url_for('jobs') }}" class="btn btn-secondary">Jobs Monitor</a>
+            </div>
+        </div>
+
+        {# Integrations & Connectors #}
+        <div class="admin-section-card">
+            <h3>🔌 Integrations</h3>
+            <p>Manage connectors, credentials, and connector actions</p>
+            <div class="admin-links">
+                <a href="{{ url_for('integrations') }}" class="btn btn-secondary">Connectors</a>
+                <a href="{{ url_for('credentials') }}" class="btn btn-secondary">Credentials</a>
+                <a href="{{ url_for('connector_actions_list') }}" class="btn btn-secondary">Action History</a>
+            </div>
+        </div>
+
+        {# Cost & Budget #}
+        <div class="admin-section-card">
+            <h3>💰 Cost Management</h3>
+            <p>Track costs, budgets, and resource utilization</p>
+            <div class="admin-links">
+                <a href="{{ url_for('costs') }}" class="btn btn-secondary">Cost Tracker</a>
+            </div>
+        </div>
+
+        {# Planning & Goals #}
+        <div class="admin-section-card">
+            <h3>📋 Plans & Goals</h3>
+            <p>View execution plans and goal submissions</p>
+            <div class="admin-links">
+                <a href="{{ url_for('goals') }}" class="btn btn-secondary">Goals</a>
+                <a href="{{ url_for('plans') }}" class="btn btn-secondary">Plans</a>
+                <a href="{{ url_for('portfolio') }}" class="btn btn-secondary">Portfolio</a>
+            </div>
+        </div>
+
+        {# Help & Documentation #}
+        <div class="admin-section-card">
+            <h3>📚 Help & Guides</h3>
+            <p>Operator playbook, templates, and quick-start flows</p>
+            <div class="admin-links">
+                <a href="{{ url_for('playbook') }}" class="btn btn-secondary">Playbook</a>
+                <a href="{{ url_for('templates_browse') }}" class="btn btn-secondary">Templates</a>
+                <a href="{{ url_for('quickstart') }}" class="btn btn-secondary">Quick-Start</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# Advanced Actions #}
+<section class="panel">
+    <h2>Advanced Actions</h2>
+    <div class="action-grid">
+        <a href="{{ url_for('events') }}" class="action-btn">📜 View All Events</a>
+    </div>
+</section>
+
+{% endblock %}

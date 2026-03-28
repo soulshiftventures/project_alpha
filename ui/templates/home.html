@@ -1,75 +1,214 @@
 {% extends "base.html" %}
 
-{% block title %}System Overview - {{ app_name }}{% endblock %}
+{% block title %}Home - {{ app_name }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>System Overview</h1>
-    <p class="subtitle">Real-time status of {{ app_name }}</p>
+    <h1>Welcome to {{ app_name }}</h1>
+    <p class="subtitle">Your market opportunity operating system</p>
 </div>
 
+{# Attention Banner - Shows if there are items needing attention #}
+{% if attention.attention_count > 0 %}
+<div class="attention-banner">
+    <div class="attention-icon">!</div>
+    <div class="attention-content">
+        <strong>{{ attention.attention_count }} item{{ 's' if attention.attention_count != 1 else '' }} need{{ '' if attention.attention_count != 1 else 's' }} your attention</strong>
+        <span class="attention-summary">
+            {% if attention.pending_approvals > 0 %}{{ attention.pending_approvals }} approval{{ 's' if attention.pending_approvals != 1 else '' }}{% endif %}
+            {% if attention.paused_scenarios > 0 %} · {{ attention.paused_scenarios }} paused{% endif %}
+            {% if attention.failed_jobs > 0 %} · {{ attention.failed_jobs }} failed{% endif %}
+            {% if attention.active_blockers > 0 %} · {{ attention.active_blockers }} blocked{% endif %}
+        </span>
+    </div>
+    <a href="{{ url_for('work_queue') }}" class="btn btn-primary">View Work Queue</a>
+</div>
+{% endif %}
+
+{# Primary Operator Flow #}
+<section class="quick-actions-section">
+    <h2>What do you want to do?</h2>
+    <div class="primary-action-grid">
+        <a href="{{ url_for('discover_page') }}" class="primary-action-card">
+            <div class="primary-action-icon">🔍</div>
+            <h3>Discover Opportunities</h3>
+            <p>Find problems worth solving through market research and theme exploration</p>
+        </a>
+        {% if quick_counts.pending_approvals > 0 or quick_counts.paused_scenarios > 0 or quick_counts.failed_jobs > 0 %}
+        <a href="{{ url_for('work_queue') }}" class="primary-action-card has-attention">
+            <div class="primary-action-icon">📋</div>
+            <h3>Review Work Queue</h3>
+            <p>{{ attention.attention_count }} item{{ 's' if attention.attention_count != 1 else '' }} need your attention</p>
+            <span class="primary-action-badge attention">{{ attention.attention_count }}</span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('work_queue') }}" class="primary-action-card">
+            <div class="primary-action-icon">✓</div>
+            <h3>Work Queue</h3>
+            <p>All clear - no items need attention right now</p>
+        </a>
+        {% endif %}
+    </div>
+</section>
+
+{# What's Happening Section #}
+<section class="panel">
+    <h2>What's Happening</h2>
+    <div class="happening-grid">
+        <div class="happening-card">
+            <h4>Emerging Opportunities</h4>
+            <p class="happening-value">{{ status.active_jobs|default(0) }}</p>
+            <p class="happening-label">Active discoveries & validations</p>
+        </div>
+        <div class="happening-card {% if status.pending_approvals > 0 %}has-attention{% endif %}">
+            <h4>Decisions Needed</h4>
+            <p class="happening-value {% if status.pending_approvals > 0 %}attention{% endif %}">{{ status.pending_approvals }}</p>
+            <p class="happening-label">Pending approvals</p>
+        </div>
+        <div class="happening-card">
+            <h4>Scenarios Running</h4>
+            <p class="happening-value">{{ quick_counts.running_scenarios|default(0) }}</p>
+            <p class="happening-label">End-to-end workflows</p>
+        </div>
+    </div>
+</section>
+
+{# Status Summary Cards #}
 <div class="status-grid">
-    <div class="status-card">
+    <div class="status-card {% if not combined_status.healthy %}status-warning{% endif %}">
         <h3>System Health</h3>
-        <span class="status-badge {{ 'active' if status.healthy else 'error' }}">{{ 'Healthy' if status.healthy else 'Unhealthy' }}</span>
+        <span class="status-badge {{ 'active' if combined_status.healthy else 'warning' }}">
+            {{ combined_status.health_status|default('Unknown', true)|title }}
+        </span>
+        <div class="status-detail">
+            {{ combined_status.healthy_subsystems|default(0) }} healthy
+            {% if combined_status.degraded_subsystems|default(0) > 0 %} · {{ combined_status.degraded_subsystems }} degraded{% endif %}
+        </div>
     </div>
     <div class="status-card">
         <h3>Active Jobs</h3>
         <span class="status-value">{{ status.active_jobs }}</span>
+        {% if quick_counts.failed_jobs > 0 %}
+        <div class="status-detail attention">{{ quick_counts.failed_jobs }} failed</div>
+        {% endif %}
     </div>
-    <div class="status-card">
+    <div class="status-card {% if status.pending_approvals > 0 %}has-attention{% endif %}">
         <h3>Pending Approvals</h3>
         <span class="status-value {% if status.pending_approvals > 0 %}attention{% endif %}">{{ status.pending_approvals }}</span>
     </div>
     <div class="status-card">
-        <h3>Total Events</h3>
-        <span class="status-value">{{ status.total_events }}</span>
+        <h3>Budget Used</h3>
+        <span class="status-value">{{ "%.0f"|format(status.budget_utilization * 100) }}%</span>
+        <div class="status-detail">${{ "%.2f"|format(status.total_cost_tracked) }} tracked</div>
     </div>
 </div>
 
+{# Two Column Layout: Needs Attention + Recent Activity #}
 <div class="two-column">
+    {# Left: Items Needing Attention #}
     <section class="panel">
-        <h2>Recent Events</h2>
+        <h2>Needs Attention</h2>
+        {% if attention.items.approvals or attention.items.paused or attention.items.failed %}
+        <ul class="attention-list">
+            {% for item in attention.items.approvals[:3] %}
+            <li class="attention-item approval">
+                <span class="attention-type-badge approval">Approval</span>
+                <span class="attention-text">{{ item.description|default(item.action, true)|truncate(50) }}</span>
+                <a href="{{ url_for('approval_detail', record_id=item.record_id) }}" class="btn btn-small">Review</a>
+            </li>
+            {% endfor %}
+            {% for item in attention.items.paused[:3] %}
+            <li class="attention-item paused">
+                <span class="attention-type-badge paused">Paused</span>
+                <span class="attention-text">{{ item.scenario_name|default(item.scenario_id, true)|truncate(50) }}</span>
+                <a href="{{ url_for('scenario_run_detail', run_id=item.run_id) }}" class="btn btn-small">Resume</a>
+            </li>
+            {% endfor %}
+            {% for item in attention.items.failed[:3] %}
+            <li class="attention-item failed">
+                <span class="attention-type-badge failed">Failed</span>
+                <span class="attention-text">{{ item.plan_id|default(item.job_id, true)|truncate(50) }}</span>
+                <a href="{{ url_for('job_detail', job_id=item.job_id) }}" class="btn btn-small">Retry</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% if attention.attention_count > 6 %}
+        <a href="{{ url_for('work_queue') }}" class="link-more">View all {{ attention.attention_count }} items</a>
+        {% endif %}
+        {% else %}
+        <div class="empty-state-success">
+            <span class="success-icon">✓</span>
+            <p>All clear - no items need attention right now.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    {# Right: Recent Activity #}
+    <section class="panel">
+        <h2>Recent Activity</h2>
         {% if recent_events %}
         <ul class="event-list">
-            {% for event in recent_events %}
+            {% for event in recent_events[:5] %}
             <li class="event-item {{ event.severity }}">
                 <span class="event-type">{{ event.event_type }}</span>
-                <span class="event-message">{{ event.message }}</span>
+                <span class="event-message">{{ event.message|truncate(60) }}</span>
                 <span class="event-time">{{ event.timestamp }}</span>
             </li>
             {% endfor %}
         </ul>
+        <a href="{{ url_for('events') }}" class="link-more">View all events</a>
         {% else %}
         <p class="empty-state">No recent events</p>
-        {% endif %}
-        <a href="{{ url_for('events') }}" class="link-more">View all events</a>
-    </section>
-
-    <section class="panel">
-        <h2>Recent Decisions</h2>
-        {% if recent_decisions %}
-        <ul class="decision-list">
-            {% for decision in recent_decisions %}
-            <li class="decision-item">
-                <span class="decision-type">{{ decision.decision_type }}</span>
-                <span class="decision-outcome">{{ decision.outcome }}</span>
-                <span class="decision-time">{{ decision.timestamp }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="empty-state">No recent decisions</p>
         {% endif %}
     </section>
 </div>
 
+{# Recent Operator Actions #}
+{% if recent_actions %}
 <section class="panel">
-    <h2>Quick Actions</h2>
-    <div class="action-grid">
-        <a href="{{ url_for('goals') }}" class="action-btn">Submit New Goal</a>
-        <a href="{{ url_for('approvals') }}" class="action-btn">Review Approvals</a>
-        <a href="{{ url_for('jobs') }}" class="action-btn">Monitor Jobs</a>
-    </div>
+    <h2>Recent Operator Actions</h2>
+    <ul class="action-history-list">
+        {% for action in recent_actions[:5] %}
+        <li class="action-history-item">
+            <span class="action-type-badge {{ action.action_type|default('action') }}">{{ action.action_type|default('action') }}</span>
+            <span class="action-description">{{ action.description|default(action.action, true) }}</span>
+            <span class="action-outcome {{ 'success' if action.success else 'failed' }}">{{ 'Success' if action.success else 'Failed' }}</span>
+            <span class="action-time">{{ action.performed_at|default(action.timestamp, true) }}</span>
+        </li>
+        {% endfor %}
+    </ul>
 </section>
+{% endif %}
+
+{# Getting Started Guide - Show if system is not fully ready #}
+{% if not combined_status.ready or not combined_status.healthy %}
+<section class="panel panel-info">
+    <h2>Getting Started</h2>
+    <p>Complete these steps to get Project Alpha ready for use:</p>
+    <ol class="setup-steps">
+        <li class="{{ 'done' if combined_status.healthy else 'pending' }}">
+            <span class="step-status">{{ '✓' if combined_status.healthy else '○' }}</span>
+            System health check
+            {% if not combined_status.healthy %}
+            <a href="{{ url_for('health') }}" class="link-small">Check health</a>
+            {% endif %}
+        </li>
+        <li class="{{ 'done' if combined_status.dry_run_ready else 'pending' }}">
+            <span class="step-status">{{ '✓' if combined_status.dry_run_ready else '○' }}</span>
+            Configure connectors for dry-run mode
+            {% if not combined_status.dry_run_ready %}
+            <a href="{{ url_for('integrations') }}" class="link-small">Configure</a>
+            {% endif %}
+        </li>
+        <li class="{{ 'done' if combined_status.live_ready else 'pending' }}">
+            <span class="step-status">{{ '✓' if combined_status.live_ready else '○' }}</span>
+            Add credentials for live mode
+            {% if not combined_status.live_ready %}
+            <a href="{{ url_for('credentials') }}" class="link-small">Add credentials</a>
+            {% endif %}
+        </li>
+    </ol>
+    <a href="{{ url_for('setup') }}" class="btn btn-secondary">View Setup Checklist</a>
+</section>
+{% endif %}
 {% endblock %}

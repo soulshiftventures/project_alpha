@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}Discovery Results - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Discovery Scan Results</h1>
+    <p class="subtitle">{{ result.input_summary }}</p>
+</div>
+
+{# Scan Summary #}
+<section class="panel">
+    <div class="scan-summary">
+        <div class="summary-item">
+            <div class="summary-label">Scan Mode</div>
+            <div class="summary-value">
+                {% if result.mode == 'theme_scan' %}Theme Scan
+                {% elif result.mode == 'pain_point_scan' %}Pain Point Scan
+                {% elif result.mode == 'industry_scan' %}Industry Scan
+                {% elif result.mode == 'problem_exploration' %}Problem Exploration
+                {% else %}{{ result.mode }}
+                {% endif %}
+            </div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Candidates Found</div>
+            <div class="summary-value">{{ result.total_candidates }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Converted</div>
+            <div class="summary-value">{{ result.get('converted_count', 0) }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Signal Source</div>
+            <div class="summary-value">
+                {% if result.metadata and result.metadata.get('enriched') %}
+                    <span class="badge badge-success">Hybrid</span>
+                {% else %}
+                    <span class="badge">Internal</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Scan Time</div>
+            <div class="summary-value">{{ result.scan_timestamp[:19] }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Scan ID</div>
+            <div class="summary-value"><code>{{ result.scan_id[:8] }}</code></div>
+        </div>
+    </div>
+</section>
+
+{# Opportunity Candidates #}
+<section class="panel">
+    <h2>Opportunity Candidates (Ranked)</h2>
+    {% if result.candidates %}
+    <div class="candidates-list">
+        {% for candidate in result.candidates %}
+        <div class="candidate-card">
+            <div class="candidate-header">
+                <h3>{{ loop.index }}. {{ candidate.title }}</h3>
+                <div class="candidate-meta">
+                    <span class="badge badge-{{ candidate.urgency }}">{{ candidate.urgency|upper }}</span>
+                    <span class="badge">Confidence: {{ (candidate.confidence * 100)|int }}%</span>
+                    {% if candidate.status == 'converted' %}
+                        <span class="badge badge-success">✓ Converted</span>
+                    {% elif candidate.status == 'archived' %}
+                        <span class="badge badge-muted">Archived</span>
+                    {% elif candidate.status == 'ignored' %}
+                        <span class="badge badge-muted">Ignored</span>
+                    {% endif %}
+                    {% if candidate.signal_source and candidate.signal_source != 'internal' %}
+                        <span class="badge badge-info">{{ candidate.signal_source|replace('_', ' ')|title }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="candidate-body">
+                <div class="candidate-section">
+                    <strong>Pain Point:</strong>
+                    <p>{{ candidate.pain_point }}</p>
+                </div>
+
+                <div class="candidate-section">
+                    <strong>Target Customer:</strong>
+                    <p>{{ candidate.target_customer }}</p>
+                </div>
+
+                <div class="candidate-grid">
+                    <div class="grid-item">
+                        <div class="grid-label">Monetization</div>
+                        <div class="grid-value">{{ candidate.monetization_clarity|title }}</div>
+                    </div>
+                    <div class="grid-item">
+                        <div class="grid-label">Automation</div>
+                        <div class="grid-value">{{ candidate.automation_potential|title }}</div>
+                    </div>
+                    <div class="grid-item">
+                        <div class="grid-label">Complexity</div>
+                        <div class="grid-value">{{ candidate.complexity|title }}</div>
+                    </div>
+                    <div class="grid-item">
+                        <div class="grid-label">Urgency</div>
+                        <div class="grid-value">{{ candidate.urgency|title }}</div>
+                    </div>
+                </div>
+
+                <div class="candidate-section">
+                    <strong>Execution Domains:</strong>
+                    <div class="domain-tags">
+                        {% for domain in candidate.execution_domains %}
+                        <span class="domain-tag">{{ domain }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="candidate-section">
+                    <strong>Recommended Next Action:</strong>
+                    <p class="recommended-action">{{ candidate.recommended_action }}</p>
+                </div>
+
+                {# Enrichment Evidence Display #}
+                {% if candidate.enrichment and candidate.enrichment.evidence %}
+                <div class="enrichment-section">
+                    <strong>External Enrichment Evidence:</strong>
+                    <div class="enrichment-status">
+                        <span class="status-badge status-{{ candidate.enrichment.enrichment_status }}">
+                            {{ candidate.enrichment.enrichment_status|replace('_', ' ')|title }}
+                        </span>
+                        <span class="signal-source-label">Signal Source: {{ candidate.enrichment.signal_source|upper }}</span>
+                    </div>
+                    <div class="evidence-list">
+                        {% for evidence in candidate.enrichment.evidence %}
+                        <div class="evidence-item">
+                            <div class="evidence-header">
+                                <span class="evidence-source">{{ evidence.source_type|replace('external_', '')|replace('_', ' ')|title }}</span>
+                                <span class="evidence-strength">Signal: {{ (evidence.signal_strength * 100)|int }}%</span>
+                            </div>
+                            <p class="evidence-notes">{{ evidence.supporting_notes }}</p>
+                            {% if evidence.external_references %}
+                            <div class="evidence-refs">
+                                <small>Sources: </small>
+                                {% for ref in evidence.external_references[:3] %}
+                                <a href="{{ ref }}" target="_blank" class="ref-link" title="{{ ref }}">{{ loop.index }}</a>{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% elif candidate.enrichment %}
+                <div class="enrichment-section">
+                    <small class="text-muted">
+                        Enrichment Status: {{ candidate.enrichment.enrichment_status|replace('_', ' ')|title }}
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="candidate-footer">
+                {% if candidate.status == 'converted' %}
+                    <span class="text-success">✓ Already converted to opportunity</span>
+                    {% if candidate.converted_opportunity_id %}
+                        <a href="{{ url_for('portfolio') }}" class="btn btn-small">View in Portfolio</a>
+                    {% endif %}
+                {% elif candidate.status == 'archived' %}
+                    <span class="text-muted">Archived: {{ candidate.archived_reason or 'No reason provided' }}</span>
+                {% elif candidate.status == 'ignored' %}
+                    <span class="text-muted">Marked as ignored</span>
+                {% else %}
+                    <form method="post" action="{{ url_for('discover_convert_to_opportunity') }}" style="display: inline;">
+                        <input type="hidden" name="scan_id" value="{{ result.scan_id }}">
+                        <input type="hidden" name="candidate_id" value="{{ candidate.candidate_id }}">
+                        <button type="submit" class="btn btn-primary">Convert to Opportunity</button>
+                    </form>
+                    <button type="button" class="btn btn-secondary" onclick="archiveCandidate('{{ candidate.candidate_id }}')">Archive</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state-large">
+        <p>No candidates generated. Try a different scan mode or adjust your inputs.</p>
+    </div>
+    {% endif %}
+</section>
+
+{# Actions #}
+<section class="panel panel-actions">
+    <a href="{{ url_for('discover_page') }}" class="btn btn-secondary">← Back to Discovery</a>
+    <a href="{{ url_for('work_queue') }}" class="btn btn-secondary">View Work Queue</a>
+</section>
+
+<style>
+.scan-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.summary-item {
+    text-align: center;
+}
+
+.summary-label {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.summary-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.candidates-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.candidate-card {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 1.5rem;
+    background: #fff;
+}
+
+.candidate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #eee;
+}
+
+.candidate-header h3 {
+    margin: 0;
+    color: #2c3e50;
+}
+
+.candidate-meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #e9ecef;
+    color: #495057;
+}
+
+.badge-critical {
+    background: #dc3545;
+    color: white;
+}
+
+.badge-high {
+    background: #fd7e14;
+    color: white;
+}
+
+.badge-medium {
+    background: #ffc107;
+    color: #000;
+}
+
+.badge-low {
+    background: #6c757d;
+    color: white;
+}
+
+.candidate-section {
+    margin-bottom: 1rem;
+}
+
+.candidate-section strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.candidate-section p {
+    margin: 0;
+    color: #212529;
+}
+
+.candidate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.grid-item {
+    text-align: center;
+}
+
+.grid-label {
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.grid-value {
+    font-weight: 600;
+    color: #333;
+}
+
+.domain-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.domain-tag {
+    padding: 0.25rem 0.75rem;
+    background: #007bff;
+    color: white;
+    border-radius: 12px;
+    font-size: 0.8rem;
+}
+
+.recommended-action {
+    font-style: italic;
+    color: #0056b3;
+    background: #e7f3ff;
+    padding: 0.75rem;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+}
+
+.candidate-footer {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.panel-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+/* Enrichment Evidence Styles */
+.enrichment-section {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #f0f9ff;
+    border-left: 3px solid #0284c7;
+    border-radius: 4px;
+}
+
+.enrichment-section strong {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: #0369a1;
+}
+
+.enrichment-status {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-live_success {
+    background: #10b981;
+    color: white;
+}
+
+.status-credentials_missing {
+    background: #fbbf24;
+    color: #000;
+}
+
+.status-live_failed {
+    background: #ef4444;
+    color: white;
+}
+
+.status-skipped {
+    background: #9ca3af;
+    color: white;
+}
+
+.status-disabled {
+    background: #e5e7eb;
+    color: #6b7280;
+}
+
+.signal-source-label {
+    font-size: 0.85rem;
+    color: #0369a1;
+    font-weight: 600;
+}
+
+.evidence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.evidence-item {
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid #bae6fd;
+    border-radius: 4px;
+}
+
+.evidence-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.evidence-source {
+    color: #0284c7;
+    font-size: 0.9rem;
+}
+
+.evidence-strength {
+    font-size: 0.85rem;
+    color: #059669;
+}
+
+.evidence-notes {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.evidence-refs {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e0f2fe;
+}
+
+.ref-link {
+    color: #0284c7;
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 0.25rem;
+}
+
+.ref-link:hover {
+    text-decoration: underline;
+}
+</style>
+
+{% endblock %}

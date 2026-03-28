@@ -397,6 +397,23 @@ class TestFlaskRoutes:
         mock.cancel_job.return_value = {"success": True}
         mock.retry_job.return_value = {"success": True}
 
+        # Daily operator activation methods
+        mock.get_paused_scenarios.return_value = []
+        mock.get_failed_jobs.return_value = []
+        mock.get_active_blockers.return_value = []
+        mock.get_capacity_status.return_value = {"warnings": []}
+        mock.get_credentials_summary.return_value = {"expiring_soon": 0}
+        mock.list_scenario_runs.return_value = []
+        mock.get_connector_actions.return_value = ([], {"failed": 0})
+        mock.get_capacity_decisions.return_value = []
+        mock.get_combined_status.return_value = {
+            "healthy": True,
+            "ready": True,
+            "dry_run_ready": True,
+            "live_ready": False,
+        }
+        mock.get_operator_action_history.return_value = []
+
         return mock
 
     def test_home_route(self, client, mock_service):
@@ -586,3 +603,305 @@ class TestServiceIntegration:
 
         # Before initialization, components are None
         assert service._initialized is False
+
+
+# =============================================================================
+# Test Smoke Routes - Critical Operator Pages
+# =============================================================================
+
+class TestSmokeRoutes:
+    """Smoke tests for critical operator routes to catch template/context bugs."""
+
+    @pytest.fixture
+    def app(self):
+        """Create test Flask app."""
+        from ui.app import app
+        app.config['TESTING'] = True
+        return app
+
+    @pytest.fixture
+    def client(self, app):
+        """Create test client."""
+        return app.test_client()
+
+    @pytest.fixture
+    def mock_service(self):
+        """Create comprehensive mock operator service for smoke tests."""
+        from ui.services import SystemStatus
+
+        mock = Mock()
+
+        # System status
+        mock.get_system_status.return_value = SystemStatus(
+            healthy=True,
+            runtime_initialized=True,
+            active_jobs=0,
+            pending_approvals=0,
+            available_backends=["INLINE_LOCAL"],
+            total_events=10,
+            recent_errors=0
+        )
+
+        # Dashboard data
+        mock.get_paused_scenarios.return_value = []
+        mock.get_failed_jobs.return_value = []
+        mock.get_active_blockers.return_value = []
+        mock.get_capacity_status.return_value = {"warnings": []}
+        mock.get_credentials_summary.return_value = {"expiring_soon": 0, "missing": 0}
+        mock.list_scenario_runs.return_value = []
+        mock.get_connector_actions.return_value = ([], {"total": 0, "failed": 0})
+        mock.get_capacity_decisions.return_value = []
+        mock.get_combined_status.return_value = {
+            "healthy": True,
+            "ready": True,
+            "dry_run_ready": True,
+            "live_ready": False,
+            "live_connectors": [],
+        }
+        mock.get_operator_action_history.return_value = []
+        mock.get_events.return_value = []
+        mock.get_recent_decisions.return_value = []
+
+        # Work queue
+        mock.get_pending_approvals.return_value = []
+        mock.get_approval_history.return_value = []
+
+        # Scenarios
+        mock.list_scenarios.return_value = []
+        mock.get_scenario_run_stats.return_value = {"total": 0, "running": 0, "completed": 0}
+
+        # Playbook/Templates
+        mock.get_templates.return_value = []
+        mock.get_template_summary.return_value = {"total": 0}
+        mock.list_template_launches.return_value = []
+
+        # Health & Readiness
+        mock.get_health_report.return_value = {
+            "status": "healthy",
+            "subsystems": {},
+            "timestamp": "2024-01-01T00:00:00Z"
+        }
+        mock.get_readiness_report.return_value = {
+            "overall_status": "ready",
+            "dry_run_ready": True,
+            "live_ready": False,
+            "components": [],
+            "connectors": [],
+            "missing_required": [],
+            "warnings": [],
+            "recommendations": [],
+            "timestamp": "2024-01-01T00:00:00Z"
+        }
+        mock.get_setup_checklist.return_value = {
+            "status": "complete",
+            "items": [
+                {"label": "Test item", "completed": True, "action": None}
+            ],
+            "completed_count": 1,
+            "total_count": 1,
+            "next_step": None,
+            "instructions": []
+        }
+
+        # Discovery
+        mock.list_discovery_scans.return_value = []
+        mock.get_discovery_scan_result.return_value = None
+        mock.run_discovery_scan.return_value = {
+            "scan_id": "test-scan",
+            "mode": "theme_scan",
+            "input_summary": "Test",
+            "total_candidates": 0,
+            "candidates": [],
+            "scan_timestamp": "2024-01-01T00:00:00",
+            "metadata": {},
+        }
+
+        return mock
+
+    def test_smoke_home(self, client, mock_service):
+        """Smoke test: / (home) page renders without errors."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/')
+            assert response.status_code == 200
+            # Updated for productization reset - home page now says "Welcome to Project Alpha"
+            assert b'Project Alpha' in response.data or b'Welcome' in response.data
+
+    def test_smoke_work_queue(self, client, mock_service):
+        """Smoke test: /work-queue page renders without errors."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/work-queue')
+            assert response.status_code == 200
+
+    def test_smoke_approvals(self, client, mock_service):
+        """Smoke test: /approvals page renders without errors."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/approvals')
+            assert response.status_code == 200
+
+    def test_smoke_scenarios(self, client, mock_service):
+        """Smoke test: /scenarios page renders without errors."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/scenarios')
+            assert response.status_code == 200
+
+    def test_smoke_playbook(self, client, mock_service):
+        """Smoke test: /playbook page renders without errors."""
+        with patch('ui.services.get_playbook_content', return_value={"title": "Test", "sections": []}):
+            with patch('ui.app.get_service', return_value=mock_service):
+                response = client.get('/playbook')
+                assert response.status_code == 200
+
+    def test_smoke_templates(self, client, mock_service):
+        """Smoke test: /templates page renders without errors."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/templates')
+            assert response.status_code == 200
+
+    def test_smoke_health(self, client, mock_service):
+        """Smoke test: /health page renders without errors."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/health')
+            assert response.status_code == 200
+
+    def test_smoke_readiness(self, client, mock_service):
+        """Smoke test: /readiness page renders without errors and checklist iterates correctly."""
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/readiness')
+            assert response.status_code == 200
+            # Verify checklist items are rendered (not dict.items())
+            assert b'Test item' in response.data
+
+    def test_readiness_checklist_data_structure(self, client, mock_service):
+        """Test /readiness checklist data is passed correctly to template."""
+        # This test specifically validates the bug fix for checklist.items vs checklist['items']
+        mock_service.get_setup_checklist.return_value = {
+            "status": "incomplete",
+            "items": [
+                {"label": "Setup credentials", "completed": False, "action": "export API_KEY=xxx"},
+                {"label": "Initialize runtime", "completed": True, "action": None}
+            ],
+            "completed_count": 1,
+            "total_count": 2,
+            "next_step": "Setup credentials",
+            "instructions": ["Follow the setup guide"]
+        }
+
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/readiness')
+            assert response.status_code == 200
+            # Verify both items are rendered
+            assert b'Setup credentials' in response.data
+            assert b'Initialize runtime' in response.data
+            assert b'export API_KEY=xxx' in response.data
+
+    def test_discover_page_loads(self, client, mock_service):
+        """Test /discover page loads with discovery scans."""
+        mock_service.list_discovery_scans.return_value = [
+            {
+                "scan_id": "scan-123",
+                "mode": "theme_scan",
+                "input_summary": "Theme Scan: AI automation",
+                "total_candidates": 3,
+                "scan_timestamp": "2024-01-01T00:00:00",
+            }
+        ]
+
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/discover')
+            assert response.status_code == 200
+            assert b'Discover Opportunities' in response.data
+            assert b'Market Pain-Point Scan' in response.data
+            assert b'Problem Exploration' in response.data
+            assert b'Industry Scan' in response.data
+
+    def test_discover_scan_market(self, client, mock_service):
+        """Test /discover/scan-market runs market scan."""
+        mock_service.run_discovery_scan.return_value = {
+            "scan_id": "scan-123",
+            "mode": "pain_point_scan",
+            "input_summary": "Market: SaaS",
+            "total_candidates": 3,
+            "candidates": [],
+            "scan_timestamp": "2024-01-01T00:00:00",
+            "metadata": {},
+        }
+
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.post('/discover/scan-market', data={
+                'market_theme': 'SaaS'
+            }, follow_redirects=False)
+            assert response.status_code == 302
+            assert '/discover/result/scan-123' in response.location
+
+    def test_discover_scan_industry(self, client, mock_service):
+        """Test /discover/scan-industry runs industry scan."""
+        mock_service.run_discovery_scan.return_value = {
+            "scan_id": "scan-456",
+            "mode": "industry_scan",
+            "input_summary": "Industry: Healthcare",
+            "total_candidates": 3,
+            "candidates": [],
+            "scan_timestamp": "2024-01-01T00:00:00",
+            "metadata": {},
+        }
+
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.post('/discover/scan-industry', data={
+                'industry': 'Healthcare'
+            }, follow_redirects=False)
+            assert response.status_code == 302
+            assert '/discover/result/scan-456' in response.location
+
+    def test_discover_from_theme(self, client, mock_service):
+        """Test /discover/from-theme runs theme scan."""
+        mock_service.run_discovery_scan.return_value = {
+            "scan_id": "scan-789",
+            "mode": "theme_scan",
+            "input_summary": "Theme: Automation",
+            "total_candidates": 3,
+            "candidates": [],
+            "scan_timestamp": "2024-01-01T00:00:00",
+            "metadata": {},
+        }
+
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.post('/discover/from-theme', data={
+                'theme': 'Automation'
+            }, follow_redirects=False)
+            assert response.status_code == 302
+            assert '/discover/result/scan-789' in response.location
+
+    def test_discover_result(self, client, mock_service):
+        """Test /discover/result/<scan_id> shows results."""
+        mock_service.get_discovery_scan_result.return_value = {
+            "scan_id": "scan-123",
+            "mode": "theme_scan",
+            "input_summary": "Theme: AI automation",
+            "total_candidates": 2,
+            "scan_timestamp": "2024-01-01T00:00:00",
+            "candidates": [
+                {
+                    "candidate_id": "cand-1",
+                    "title": "AI Automation Platform",
+                    "pain_point": "Manual AI processes are time-consuming",
+                    "target_customer": "Growing businesses",
+                    "urgency": "high",
+                    "monetization_clarity": "emerging",
+                    "execution_domains": ["automation", "ai"],
+                    "automation_potential": "high",
+                    "complexity": "medium",
+                    "recommended_action": "Build MVP",
+                    "confidence": 0.7,
+                    "discovered_via": "theme_scan",
+                    "discovered_at": "2024-01-01T00:00:00",
+                }
+            ],
+            "metadata": {},
+        }
+
+        with patch('ui.app.get_service', return_value=mock_service):
+            response = client.get('/discover/result/scan-123')
+            assert response.status_code == 200
+            assert b'Discovery Scan Results' in response.data
+            assert b'AI Automation Platform' in response.data
+            assert b'Manual AI processes are time-consuming' in response.data

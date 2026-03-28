@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}System Readiness - {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1>System Readiness</h1>
+
+<div class="status-overview">
+    <div class="status-card {% if report.overall_status == 'ready' %}status-ok{% elif report.overall_status == 'partial' %}status-warning{% else %}status-error{% endif %}">
+        <h3>Overall Status</h3>
+        <span class="status-badge">{{ report.overall_status | upper }}</span>
+    </div>
+    <div class="status-card {% if report.dry_run_ready %}status-ok{% else %}status-error{% endif %}">
+        <h3>Dry-Run Ready</h3>
+        <span class="status-badge">{{ 'YES' if report.dry_run_ready else 'NO' }}</span>
+    </div>
+    <div class="status-card {% if report.live_ready %}status-ok{% else %}status-warning{% endif %}">
+        <h3>Live Ready</h3>
+        <span class="status-badge">{{ 'YES' if report.live_ready else 'NO' }}</span>
+    </div>
+</div>
+
+{% if report.missing_required %}
+<div class="alert alert-error">
+    <h3>Missing Required Components</h3>
+    <ul>
+        {% for item in report.missing_required %}
+        <li>{{ item }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if report.warnings %}
+<div class="alert alert-warning">
+    <h3>Warnings</h3>
+    <ul>
+        {% for warning in report.warnings %}
+        <li>{{ warning }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<h2>Components</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Component</th>
+            <th>Status</th>
+            <th>Required</th>
+            <th>Message</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for comp in report.components %}
+        <tr class="{% if comp.status == 'ok' %}row-ok{% elif comp.status == 'degraded' %}row-warning{% else %}row-error{% endif %}">
+            <td>{{ comp.name }}</td>
+            <td><span class="status-badge status-{{ comp.status }}">{{ comp.status | upper }}</span></td>
+            <td>{{ 'Yes' if comp.required else 'No' }}</td>
+            <td>{{ comp.message }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Connectors</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Connector</th>
+            <th>Status</th>
+            <th>Dry-Run</th>
+            <th>Live</th>
+            <th>Missing</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for conn in report.connectors %}
+        <tr class="{% if conn.live_ready %}row-ok{% elif conn.dry_run_ready %}row-warning{% else %}row-error{% endif %}">
+            <td>{{ conn.name }}</td>
+            <td><span class="status-badge status-{{ conn.status }}">{{ conn.status | upper }}</span></td>
+            <td>{{ 'Ready' if conn.dry_run_ready else 'Not Ready' }}</td>
+            <td>{{ 'Ready' if conn.live_ready else 'Not Ready' }}</td>
+            <td>{{ conn.missing_credentials | join(', ') if conn.missing_credentials else '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if report.recommendations %}
+<h2>Recommendations</h2>
+<ul class="recommendations-list">
+    {% for rec in report.recommendations %}
+    <li>{{ rec }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Setup Checklist</h2>
+<div class="checklist">
+    <div class="checklist-header">
+        <span>Progress: {{ checklist.completed_count }}/{{ checklist.total_count }}</span>
+        <span class="status-badge status-{{ checklist.status }}">{{ checklist.status | upper }}</span>
+    </div>
+    <ul class="checklist-items">
+        {% for item in checklist['items'] %}
+        <li class="{% if item.completed %}completed{% else %}pending{% endif %}">
+            <span class="checkbox">{{ '[x]' if item.completed else '[ ]' }}</span>
+            <span class="label">{{ item.label }}</span>
+            {% if not item.completed and item.action %}
+            <code class="action">{{ item.action }}</code>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<p class="timestamp">Checked at: {{ report.timestamp }}</p>
+
+<div class="actions">
+    <a href="{{ url_for('setup') }}" class="btn btn-primary">View Setup Instructions</a>
+    <a href="{{ url_for('health') }}" class="btn btn-secondary">View Health Status</a>
+</div>
+
+{% endblock %}

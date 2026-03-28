@@ -14,19 +14,20 @@
             <span class="version">v{{ version }}</span>
         </div>
         <ul class="nav-links">
-            <li><a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="active"{% endif %}>Overview</a></li>
-            <li><a href="{{ url_for('scenarios') }}" {% if 'scenario' in request.endpoint %}class="active"{% endif %}>Scenarios</a></li>
-            <li><a href="{{ url_for('discovery') }}" {% if 'discovery' in request.endpoint or 'opportunity' in request.endpoint %}class="active"{% endif %}>Discovery</a></li>
-            <li><a href="{{ url_for('portfolio') }}" {% if 'portfolio' in request.endpoint %}class="active"{% endif %}>Portfolio</a></li>
-            <li><a href="{{ url_for('goals') }}" {% if 'goal' in request.endpoint %}class="active"{% endif %}>Goals</a></li>
-            <li><a href="{{ url_for('plans') }}" {% if 'plan' in request.endpoint %}class="active"{% endif %}>Plans</a></li>
+            {# Primary Product Navigation #}
+            <li><a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="active"{% endif %}>Home</a></li>
+            <li><a href="{{ url_for('discover_page') }}" {% if 'discover' in request.endpoint or 'discovery' in request.endpoint or 'opportunity' in request.endpoint %}class="active"{% endif %}>Discover</a></li>
+            <li><a href="{{ url_for('work_queue') }}" {% if 'work_queue' in request.endpoint or 'scenario' in request.endpoint %}class="active nav-attention"{% endif %}>
+                Work
+                {% if nav_attention_count is defined and nav_attention_count > 0 %}
+                <span class="nav-badge">{{ nav_attention_count }}</span>
+                {% endif %}
+            </a></li>
             <li><a href="{{ url_for('approvals') }}" {% if 'approv' in request.endpoint %}class="active"{% endif %}>Approvals</a></li>
-            <li><a href="{{ url_for('jobs') }}" {% if 'job' in request.endpoint %}class="active"{% endif %}>Jobs</a></li>
-            <li><a href="{{ url_for('costs') }}" {% if 'cost' in request.endpoint %}class="active"{% endif %}>Costs</a></li>
-            <li><a href="{{ url_for('capacity') }}" {% if 'capacity' in request.endpoint %}class="active"{% endif %}>Capacity</a></li>
-            <li><a href="{{ url_for('connector_actions_list') }}" {% if 'connector_action' in request.endpoint %}class="active"{% endif %}>Connector Actions</a></li>
-            <li><a href="{{ url_for('events') }}" {% if 'event' in request.endpoint %}class="active"{% endif %}>Events</a></li>
-            <li><a href="{{ url_for('backends') }}" {% if 'backend' in request.endpoint %}class="active"{% endif %}>Backends</a></li>
+            <li><a href="{{ url_for('events') }}" {% if 'event' in request.endpoint %}class="active"{% endif %}>History</a></li>
+            <li class="nav-divider"></li>
+            {# Secondary: Admin/Settings dropdown placeholder - for now just direct link #}
+            <li><a href="{{ url_for('admin_hub') }}" {% if 'admin' in request.endpoint or 'backend' in request.endpoint or 'health' in request.endpoint or 'integration' in request.endpoint or 'credential' in request.endpoint or 'capacity' in request.endpoint or 'cost' in request.endpoint or 'readiness' in request.endpoint or 'setup' in request.endpoint %}class="active"{% endif %}>Admin</a></li>
         </ul>
     </nav>
 

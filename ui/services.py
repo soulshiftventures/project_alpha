@@ -1820,17 +1820,394 @@ class OperatorService:
         runner = get_scenario_runner()
         return runner.get_run_stats()
 
+    # =========================================================================
+    # RECOVERY & WORKFLOW CONTROL OPERATIONS
+    # =========================================================================
 
-# Singleton instance
-_operator_service: Optional[OperatorService] = None
+    def get_operator_dashboard(self) -> Dict[str, Any]:
+        """
+        Get comprehensive operator dashboard data.
 
+        Returns all actionable items: pending approvals, paused scenarios,
+        failed jobs, active blockers, and recent actions.
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        return actions.get_operator_dashboard()
 
-def get_operator_service() -> OperatorService:
-    """Get the global operator service."""
-    global _operator_service
-    if _operator_service is None:
-        _operator_service = OperatorService()
-    return _operator_service
+    def get_paused_scenarios(self) -> List[Dict[str, Any]]:
+        """
+        Get all scenarios that are paused/awaiting action.
+
+        Returns scenarios with status awaiting_approval or partial,
+        including their blockers and available actions.
+        """
+        from core.recovery_manager import get_recovery_manager
+        manager = get_recovery_manager()
+        return manager.get_paused_scenarios()
+
+    def get_failed_jobs(self) -> List[Dict[str, Any]]:
+        """
+        Get all failed jobs that can be retried.
+
+        Returns jobs with status failed, including blockers
+        and available retry/rerun actions.
+        """
+        from core.recovery_manager import get_recovery_manager
+        manager = get_recovery_manager()
+        return manager.get_failed_jobs()
+
+    def get_active_blockers(
+        self,
+        scenario_run_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        blocker_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get active blockers with optional filters.
+
+        Args:
+            scenario_run_id: Filter by scenario run
+            job_id: Filter by job
+            blocker_type: Filter by blocker type
+
+        Returns:
+            List of active blocker dicts
+        """
+        from core.recovery_manager import get_recovery_manager, BlockerType
+        manager = get_recovery_manager()
+
+        type_enum = None
+        if blocker_type:
+            try:
+                type_enum = BlockerType(blocker_type)
+            except ValueError:
+                pass
+
+        blockers = manager.get_active_blockers(
+            scenario_run_id=scenario_run_id,
+            job_id=job_id,
+            blocker_type=type_enum,
+        )
+        return [b.to_dict() for b in blockers]
+
+    def get_workflow_status(
+        self,
+        scenario_run_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get comprehensive workflow status for a scenario or job.
+
+        Args:
+            scenario_run_id: Scenario run to inspect
+            job_id: Job to inspect
+
+        Returns:
+            Status dict with blockers, available actions, and history
+        """
+        from core.recovery_manager import get_recovery_manager
+        manager = get_recovery_manager()
+        return manager.get_workflow_status(
+            scenario_run_id=scenario_run_id,
+            job_id=job_id,
+        )
+
+    def resume_scenario(
+        self,
+        run_id: str,
+        resumed_by: str = "operator",
+        skip_failed: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Resume a paused scenario.
+
+        Args:
+            run_id: ID of the scenario run to resume
+            resumed_by: Who is resuming
+            skip_failed: If True, skip failed steps and continue
+
+        Returns:
+            Result dict with outcome and new run ID if created
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.resume_scenario(
+            run_id=run_id,
+            performed_by=resumed_by,
+            skip_failed=skip_failed,
+        )
+        return result.to_dict()
+
+    def resume_after_approval(
+        self,
+        approval_id: str,
+        resumed_by: str = "operator",
+    ) -> Dict[str, Any]:
+        """
+        Resume workflow after an approval has been granted.
+
+        This automatically finds and resumes any workflows
+        that were waiting for this approval.
+
+        Args:
+            approval_id: ID of the approval that was granted
+            resumed_by: Who granted the approval
+
+        Returns:
+            Result dict with outcome
+        """
+        from core.recovery_manager import get_recovery_manager
+        manager = get_recovery_manager()
+        result = manager.resume_after_approval(
+            approval_id=approval_id,
+            resumed_by=resumed_by,
+        )
+        return result.to_dict()
+
+    def retry_failed_job(
+        self,
+        job_id: str,
+        retried_by: str = "operator",
+    ) -> Dict[str, Any]:
+        """
+        Retry a failed job.
+
+        Creates a new job execution for the same plan.
+
+        Args:
+            job_id: ID of the job to retry
+            retried_by: Who is retrying
+
+        Returns:
+            Result dict with outcome and new job ID if created
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.retry_job(
+            job_id=job_id,
+            performed_by=retried_by,
+        )
+        return result.to_dict()
+
+    def retry_connector_action(
+        self,
+        execution_id: str,
+        retried_by: str = "operator",
+    ) -> Dict[str, Any]:
+        """
+        Retry a failed connector action.
+
+        Args:
+            execution_id: ID of the connector execution to retry
+            retried_by: Who is retrying
+
+        Returns:
+            Result dict with outcome
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.retry_connector_action(
+            execution_id=execution_id,
+            performed_by=retried_by,
+        )
+        return result.to_dict()
+
+    def retry_scenario_step(
+        self,
+        run_id: str,
+        step_id: str,
+        retried_by: str = "operator",
+    ) -> Dict[str, Any]:
+        """
+        Retry a failed scenario step.
+
+        Args:
+            run_id: ID of the scenario run
+            step_id: ID of the step to retry
+            retried_by: Who is retrying
+
+        Returns:
+            Result dict with outcome and new run ID if created
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.retry_scenario_step(
+            run_id=run_id,
+            step_id=step_id,
+            performed_by=retried_by,
+        )
+        return result.to_dict()
+
+    def rerun_execution_plan(
+        self,
+        plan_id: str,
+        triggered_by: str = "operator",
+        dry_run: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Rerun a previously created execution plan.
+
+        Creates a new plan and job, preserving audit trail.
+
+        Args:
+            plan_id: ID of the plan to rerun
+            triggered_by: Who triggered the rerun
+            dry_run: Override dry_run setting
+
+        Returns:
+            Result dict with outcome and new job ID
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.rerun_plan(
+            plan_id=plan_id,
+            performed_by=triggered_by,
+            dry_run=dry_run,
+        )
+        return result.to_dict()
+
+    def rerun_scenario(
+        self,
+        run_id: str,
+        triggered_by: str = "operator",
+        dry_run: Optional[bool] = None,
+        new_inputs: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Rerun a scenario with the same or modified inputs.
+
+        Args:
+            run_id: ID of the scenario run to base rerun on
+            triggered_by: Who triggered the rerun
+            dry_run: Override dry_run setting
+            new_inputs: Optional modified inputs
+
+        Returns:
+            Result dict with outcome and new run ID
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.rerun_scenario(
+            run_id=run_id,
+            performed_by=triggered_by,
+            dry_run=dry_run,
+            new_inputs=new_inputs,
+        )
+        return result.to_dict()
+
+    def skip_scenario_step(
+        self,
+        run_id: str,
+        step_id: str,
+        skipped_by: str = "operator",
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Skip a blocked/failed step and continue the scenario.
+
+        Args:
+            run_id: ID of the scenario run
+            step_id: ID of the step to skip
+            skipped_by: Who is skipping
+            reason: Reason for skipping
+
+        Returns:
+            Result dict with outcome and new run ID
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.skip_step(
+            run_id=run_id,
+            step_id=step_id,
+            performed_by=skipped_by,
+            reason=reason,
+        )
+        return result.to_dict()
+
+    def cancel_scenario_run(
+        self,
+        run_id: str,
+        cancelled_by: str = "operator",
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Cancel a running scenario.
+
+        Args:
+            run_id: ID of the scenario run to cancel
+            cancelled_by: Who is cancelling
+            reason: Reason for cancellation
+
+        Returns:
+            Result dict with outcome
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.cancel_scenario(
+            run_id=run_id,
+            performed_by=cancelled_by,
+            reason=reason,
+        )
+        return result.to_dict()
+
+    def approve_with_resume(
+        self,
+        approval_id: str,
+        approver: str = "operator",
+        rationale: str = "",
+        auto_resume: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Approve a request and optionally auto-resume blocked workflows.
+
+        Args:
+            approval_id: ID of the approval to grant
+            approver: Who is approving
+            rationale: Reason for approval
+            auto_resume: If True, automatically resume blocked workflows
+
+        Returns:
+            Result dict with approval and resume outcomes
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        result = actions.approve(
+            approval_id=approval_id,
+            rationale=rationale,
+            performed_by=approver,
+            auto_resume=auto_resume,
+        )
+        return result.to_dict()
+
+    def get_recovery_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get recent recovery operation history.
+
+        Args:
+            limit: Maximum records to return
+
+        Returns:
+            List of recovery operation results
+        """
+        from core.recovery_manager import get_recovery_manager
+        manager = get_recovery_manager()
+        return manager.get_recovery_history(limit=limit)
+
+    def get_operator_action_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get recent operator action history.
+
+        Args:
+            limit: Maximum records to return
+
+        Returns:
+            List of operator action results
+        """
+        from core.operator_actions import get_operator_actions
+        actions = get_operator_actions()
+        return actions.get_action_history(limit=limit)
+
     # -------------------------------------------------------------------------
     # Connector Action History
     # -------------------------------------------------------------------------
@@ -1843,18 +2220,12 @@ def get_operator_service() -> OperatorService:
         related_id: Optional[str] = None,
         limit: int = 100,
     ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
-        """
-        Get connector action execution history with statistics.
-
-        Returns:
-            Tuple of (actions list, stats dict)
-        """
+        """Get connector action execution history with statistics."""
         self._ensure_initialized()
 
         from core.connector_action_history import get_connector_action_history, ConnectorActionFilter
         history = get_connector_action_history()
 
-        # Build filter
         success_filter = None
         if status == "success":
             success_filter = True
@@ -1873,31 +2244,1135 @@ def get_operator_service() -> OperatorService:
 
         actions = history.query_actions(filter_criteria)
         stats = history.get_connector_stats(connector=connector)
-
         return actions, stats
 
     def get_connector_action_detail(self, execution_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed information about a connector action execution."""
         self._ensure_initialized()
-
         from core.connector_action_history import get_connector_action_history
         history = get_connector_action_history()
-
         return history.get_action_by_id(execution_id)
 
     def get_unique_connectors(self) -> List[str]:
         """Get list of unique connectors that have been executed."""
         self._ensure_initialized()
-
         from core.connector_action_history import get_connector_action_history
         history = get_connector_action_history()
-
-        # Get recent actions and extract unique connectors
         actions = history.get_recent_actions(limit=1000)
         connectors = set()
         for action in actions:
             connector_name = safe_get(action, "connector_name")
             if connector_name:
                 connectors.add(connector_name)
-
         return sorted(list(connectors))
+
+    # -------------------------------------------------------------------------
+    # Readiness & Health
+    # -------------------------------------------------------------------------
+
+    def get_readiness_report(self) -> Dict[str, Any]:
+        """Get full system readiness report."""
+        from core.readiness_checker import get_readiness_checker
+        checker = get_readiness_checker()
+        report = checker.check_all()
+        return report.to_dict()
+
+    def get_readiness_quick(self) -> Dict[str, Any]:
+        """Get quick readiness status."""
+        from core.readiness_checker import get_readiness_checker
+        checker = get_readiness_checker()
+        return checker.check_quick()
+
+    def get_health_report(self) -> Dict[str, Any]:
+        """Get full system health report."""
+        from core.health_monitor import get_health_monitor
+        monitor = get_health_monitor()
+        health = monitor.check_all()
+        return health.to_dict()
+
+    def get_health_quick(self) -> Dict[str, Any]:
+        """Get quick health status."""
+        from core.health_monitor import get_health_monitor
+        monitor = get_health_monitor()
+        return monitor.check_quick()
+
+    def get_setup_checklist(self) -> Dict[str, Any]:
+        """Get first-use setup checklist."""
+        from core.startup_manager import get_startup_manager
+        manager = get_startup_manager()
+        checklist = manager.get_setup_checklist()
+        return checklist.to_dict()
+
+    def get_startup_instructions(self) -> List[str]:
+        """Get operator startup instructions."""
+        from core.startup_manager import get_startup_manager
+        manager = get_startup_manager()
+        return manager.get_startup_instructions()
+
+    def run_startup(self, skip_health_check: bool = False) -> Dict[str, Any]:
+        """Run system startup sequence."""
+        from core.startup_manager import get_startup_manager
+        manager = get_startup_manager()
+        result = manager.startup(skip_health_check=skip_health_check)
+        return result.to_dict()
+
+    def get_connector_readiness(self) -> List[Dict[str, Any]]:
+        """Get readiness status for all connectors."""
+        from core.readiness_checker import get_readiness_checker
+        checker = get_readiness_checker()
+        report = checker.check_all()
+        return [c.to_dict() for c in report.connectors]
+
+    def get_combined_status(self) -> Dict[str, Any]:
+        """Get combined readiness and health status."""
+        readiness = self.get_readiness_quick()
+        health = self.get_health_quick()
+        return {
+            "ready": readiness.get("ready", False),
+            "readiness_status": readiness.get("status", "unknown"),
+            "dry_run_ready": readiness.get("dry_run_ready", False),
+            "live_ready": readiness.get("live_ready", False),
+            "live_connectors": readiness.get("live_connectors", []),
+            "healthy": health.get("healthy", False),
+            "health_status": health.get("status", "unknown"),
+            "healthy_subsystems": health.get("healthy_count", 0),
+            "degraded_subsystems": health.get("degraded_count", 0),
+            "unhealthy_subsystems": health.get("unhealthy_count", 0),
+            "subsystems": health.get("subsystems", {}),
+        }
+
+
+# Singleton instance
+_operator_service: Optional[OperatorService] = None
+
+
+def get_operator_service() -> OperatorService:
+    """Get the global operator service."""
+    global _operator_service
+    if _operator_service is None:
+        _operator_service = OperatorService()
+    return _operator_service
+
+
+# =============================================================================
+# DAILY OPERATOR ACTIVATION - Dashboard and Work Queue Methods
+# =============================================================================
+# These helper functions aggregate operator-facing data for the dashboard.
+
+
+def get_attention_summary(service: OperatorService) -> Dict[str, Any]:
+    """
+    Get summary of items needing operator attention.
+
+    Aggregates: pending approvals, paused scenarios, failed jobs,
+    blocked items, retryable items, and capacity warnings.
+
+    Returns:
+        Attention summary dict with counts and items
+    """
+    # Get core attention items
+    pending_approvals = service.get_pending_approvals()
+    paused_scenarios = service.get_paused_scenarios()
+    failed_jobs = service.get_failed_jobs()
+
+    # Get active blockers
+    try:
+        blockers = service.get_active_blockers()
+    except Exception:
+        blockers = []
+
+    # Get capacity warnings
+    try:
+        capacity = service.get_capacity_status()
+        capacity_warnings = capacity.get("warnings", [])
+    except Exception:
+        capacity_warnings = []
+
+    # Get credential warnings
+    try:
+        cred_summary = service.get_credentials_summary()
+        expiring_creds = cred_summary.get("expiring_soon", 0)
+        missing_creds = cred_summary.get("missing", 0)
+    except Exception:
+        expiring_creds = 0
+        missing_creds = 0
+
+    # Calculate total attention count
+    attention_count = (
+        len(pending_approvals)
+        + len(paused_scenarios)
+        + len(failed_jobs)
+        + len(blockers)
+        + (1 if expiring_creds > 0 else 0)
+        + (1 if missing_creds > 0 else 0)
+        + len(capacity_warnings)
+    )
+
+    return {
+        "attention_count": attention_count,
+        "pending_approvals": len(pending_approvals),
+        "paused_scenarios": len(paused_scenarios),
+        "failed_jobs": len(failed_jobs),
+        "active_blockers": len(blockers),
+        "expiring_credentials": expiring_creds,
+        "missing_credentials": missing_creds,
+        "capacity_warnings": len(capacity_warnings),
+        "items": {
+            "approvals": pending_approvals[:5],
+            "paused": paused_scenarios[:5],
+            "failed": failed_jobs[:5],
+            "blockers": blockers[:5] if isinstance(blockers, list) else [],
+        },
+    }
+
+
+def get_unified_work_queue(service: OperatorService, limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Get unified work queue combining all actionable items.
+
+    Combines: pending approvals, paused scenarios, blocked actions,
+    failed jobs, retryable items, resume-ready items.
+
+    Items are sorted by priority and timestamp.
+
+    Returns:
+        List of work queue items
+    """
+    queue_items = []
+
+    # Add pending approvals
+    for approval in service.get_pending_approvals():
+        queue_items.append({
+            "queue_type": "approval",
+            "priority": approval.get("priority", "normal"),
+            "id": approval.get("record_id"),
+            "title": approval.get("description", approval.get("action", "Pending Approval")),
+            "status": "pending",
+            "category": "Needs Approval",
+            "created_at": approval.get("created_at"),
+            "context": {
+                "request_type": approval.get("request_type"),
+                "connector": approval.get("connector_name"),
+                "operation": approval.get("operation"),
+                "risk_level": approval.get("risk_level"),
+            },
+            "actions": ["approve", "deny", "view_detail"],
+        })
+
+    # Add paused scenarios
+    for scenario in service.get_paused_scenarios():
+        queue_items.append({
+            "queue_type": "scenario",
+            "priority": "medium",
+            "id": scenario.get("run_id"),
+            "title": scenario.get("scenario_name", scenario.get("scenario_id", "Paused Scenario")),
+            "status": scenario.get("status", "paused"),
+            "category": "Paused",
+            "created_at": scenario.get("started_at"),
+            "context": {
+                "steps_completed": scenario.get("steps_completed", 0),
+                "total_steps": scenario.get("total_steps", 0),
+                "blockers": scenario.get("blockers", []),
+            },
+            "actions": ["resume", "retry", "skip_step", "cancel", "view_detail"],
+        })
+
+    # Add failed jobs
+    for job in service.get_failed_jobs():
+        queue_items.append({
+            "queue_type": "job",
+            "priority": "high",
+            "id": job.get("job_id"),
+            "title": f"Failed: {job.get('plan_id', 'Job')}",
+            "status": "failed",
+            "category": "Failed",
+            "created_at": job.get("completed_at") or job.get("dispatched_at"),
+            "context": {
+                "error": job.get("error"),
+                "retry_count": job.get("retry_count", 0),
+                "backend": job.get("backend"),
+            },
+            "actions": ["retry", "rerun_plan", "view_detail"],
+        })
+
+    # Add active blockers
+    try:
+        blockers = service.get_active_blockers()
+        for blocker in blockers:
+            if isinstance(blocker, dict):
+                queue_items.append({
+                    "queue_type": "blocker",
+                    "priority": "high",
+                    "id": blocker.get("blocker_id"),
+                    "title": blocker.get("message", "Blocked"),
+                    "status": "blocked",
+                    "category": "Blocked",
+                    "created_at": blocker.get("created_at"),
+                    "context": {
+                        "blocker_type": blocker.get("blocker_type"),
+                        "related_id": blocker.get("related_id"),
+                        "resolution_hint": blocker.get("resolution_hint"),
+                    },
+                    "actions": blocker.get("available_actions", ["view_detail"]),
+                })
+    except Exception:
+        pass
+
+    # Sort by priority (critical > high > medium > low) and timestamp
+    priority_order = {"critical": 0, "high": 1, "medium": 2, "normal": 2, "low": 3}
+    queue_items.sort(key=lambda x: (
+        priority_order.get(x.get("priority", "normal"), 2),
+        x.get("created_at") or "",
+    ))
+
+    return queue_items[:limit]
+
+
+def get_next_step_guidance(item: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get actionable next-step guidance for a work queue item.
+
+    Provides specific instructions based on item type and state.
+
+    Returns:
+        Guidance dict with recommendation and actions
+    """
+    queue_type = item.get("queue_type")
+    status = item.get("status")
+    context = item.get("context", {})
+
+    guidance = {
+        "recommendation": "",
+        "primary_action": None,
+        "secondary_actions": [],
+        "explanation": "",
+    }
+
+    if queue_type == "approval":
+        if context.get("risk_level") == "high":
+            guidance["recommendation"] = "Review carefully before approving"
+            guidance["explanation"] = "This is a high-risk action requiring careful review."
+        else:
+            guidance["recommendation"] = "Review and approve or deny"
+            guidance["explanation"] = "Standard approval request awaiting your decision."
+        guidance["primary_action"] = {"action": "approve", "label": "Approve"}
+        guidance["secondary_actions"] = [
+            {"action": "deny", "label": "Deny"},
+            {"action": "view_detail", "label": "View Details"},
+        ]
+
+    elif queue_type == "scenario":
+        blockers = context.get("blockers", [])
+        if blockers:
+            blocker_types = [b.get("type") if isinstance(b, dict) else str(b) for b in blockers]
+            if "approval_required" in blocker_types:
+                guidance["recommendation"] = "Approve pending action to continue"
+                guidance["explanation"] = "Scenario waiting for approval. Approve the action to resume."
+                guidance["primary_action"] = {"action": "approve_blocker", "label": "Go to Approval"}
+            elif "missing_credential" in blocker_types:
+                guidance["recommendation"] = "Add missing credential"
+                guidance["explanation"] = "Scenario blocked on a missing credential."
+                guidance["primary_action"] = {"action": "add_credential", "label": "Add Credential"}
+            else:
+                guidance["recommendation"] = "Resolve blockers or skip step"
+                guidance["explanation"] = "Scenario has blockers that need resolution."
+                guidance["primary_action"] = {"action": "view_detail", "label": "View Blockers"}
+        else:
+            guidance["recommendation"] = "Resume scenario execution"
+            guidance["explanation"] = "Scenario is paused and ready to resume."
+            guidance["primary_action"] = {"action": "resume", "label": "Resume"}
+        guidance["secondary_actions"] = [
+            {"action": "skip_step", "label": "Skip Failed Step"},
+            {"action": "cancel", "label": "Cancel Scenario"},
+        ]
+
+    elif queue_type == "job":
+        error = context.get("error", "")
+        retry_count = context.get("retry_count", 0)
+        if retry_count < 3:
+            guidance["recommendation"] = "Retry the failed job"
+            guidance["explanation"] = f"Job failed with error: {error[:100]}..."
+            guidance["primary_action"] = {"action": "retry", "label": "Retry Job"}
+        else:
+            guidance["recommendation"] = "Review error and rerun plan"
+            guidance["explanation"] = "Job failed multiple times. Consider reviewing the plan."
+            guidance["primary_action"] = {"action": "rerun_plan", "label": "Rerun Plan"}
+        guidance["secondary_actions"] = [
+            {"action": "view_detail", "label": "View Error Details"},
+        ]
+
+    elif queue_type == "blocker":
+        blocker_type = context.get("blocker_type", "")
+        hint = context.get("resolution_hint", "")
+        guidance["recommendation"] = hint or f"Resolve {blocker_type} blocker"
+        guidance["explanation"] = f"Work blocked by: {blocker_type}"
+        guidance["primary_action"] = {"action": "view_detail", "label": "View Details"}
+
+    return guidance
+
+
+def get_quick_action_counts(service: OperatorService) -> Dict[str, int]:
+    """
+    Get counts for quick action buttons.
+
+    Returns counts for common operator actions.
+    """
+    # Get pending approvals count
+    pending_approvals = len(service.get_pending_approvals())
+
+    # Get active scenario runs
+    try:
+        scenario_runs = service.list_scenario_runs(limit=100)
+        running_scenarios = len([r for r in scenario_runs if r.get("status") == "running"])
+        paused_scenarios = len([r for r in scenario_runs if r.get("status") in ("paused", "awaiting_approval", "partial")])
+    except Exception:
+        running_scenarios = 0
+        paused_scenarios = 0
+
+    # Get job counts
+    try:
+        jobs = service.get_jobs(limit=100)
+        active_jobs = len([j for j in jobs if j.get("status") in ("running", "pending", "queued")])
+        failed_jobs = len([j for j in jobs if j.get("status") == "failed"])
+    except Exception:
+        active_jobs = 0
+        failed_jobs = 0
+
+    # Get connector actions needing review
+    try:
+        actions, _ = service.get_connector_actions(limit=50)
+        recent_failed_actions = len([a for a in actions if not a.get("success")])
+    except Exception:
+        recent_failed_actions = 0
+
+    # Get capacity warnings
+    try:
+        capacity = service.get_capacity_status()
+        capacity_warnings = len(capacity.get("warnings", []))
+    except Exception:
+        capacity_warnings = 0
+
+    return {
+        "pending_approvals": pending_approvals,
+        "running_scenarios": running_scenarios,
+        "paused_scenarios": paused_scenarios,
+        "active_jobs": active_jobs,
+        "failed_jobs": failed_jobs,
+        "failed_actions": recent_failed_actions,
+        "capacity_warnings": capacity_warnings,
+    }
+
+
+def get_combined_status(service: OperatorService) -> Dict[str, Any]:
+    """
+    Get combined readiness and health status.
+
+    Returns a dict with health information for admin views.
+    """
+    try:
+        return service.get_combined_status()
+    except Exception:
+        return {
+            "ready": True,
+            "healthy": True,
+            "dry_run_ready": True,
+            "live_ready": False,
+            "healthy_subsystems": 0,
+            "degraded_subsystems": 0,
+            "health_status": "unknown",
+        }
+
+
+def get_operator_home_data(service: OperatorService) -> Dict[str, Any]:
+    """
+    Get all data needed for the operator home/dashboard.
+
+    Combines attention summary, quick actions, recent activity, and status.
+    """
+    # Get system status
+    status = service.get_system_status()
+
+    # Get attention summary
+    attention = get_attention_summary(service)
+
+    # Get quick action counts
+    quick_counts = get_quick_action_counts(service)
+
+    # Get recent events (filtered for important ones)
+    recent_events = service.get_events(limit=10)
+
+    # Get recent decisions
+    recent_decisions = service.get_recent_decisions(limit=5)
+
+    # Get combined readiness/health
+    combined_status = get_combined_status(service)
+
+    # Get recent operator actions
+    try:
+        recent_actions = service.get_operator_action_history(limit=5)
+    except Exception:
+        recent_actions = []
+
+    return {
+        "status": status.to_dict(),
+        "attention": attention,
+        "quick_counts": quick_counts,
+        "recent_events": recent_events,
+        "recent_decisions": recent_decisions,
+        "combined_status": combined_status,
+        "recent_actions": recent_actions,
+    }
+
+
+# =============================================================================
+# End Daily Operator Activation Methods
+# =============================================================================
+
+
+# =============================================================================
+# Template Registry and Playbook Methods
+# =============================================================================
+
+# Import template registry
+from core.template_registry import (
+    get_template_registry,
+    TemplateRegistry,
+    TemplateCategory,
+    TemplateMode,
+    TemplateComplexity,
+    WorkflowTemplate,
+    TemplateLaunch,
+)
+
+
+def get_playbook_content() -> Dict[str, Any]:
+    """
+    Get the operator playbook content for rendering.
+
+    Returns structured playbook data including sections,
+    quick reference, and common workflows.
+    """
+    return {
+        "title": "Operator Playbook",
+        "version": "1.0",
+        "sections": [
+            {
+                "id": "getting-started",
+                "title": "Getting Started",
+                "summary": "First-time setup and system startup",
+                "topics": [
+                    {"name": "Verify Readiness", "route": "/readiness", "description": "Check all components are operational"},
+                    {"name": "Setup Checklist", "route": "/setup", "description": "Complete first-use configuration"},
+                    {"name": "Health Check", "route": "/health", "description": "Confirm subsystems are healthy"},
+                ],
+            },
+            {
+                "id": "daily-workflow",
+                "title": "Daily Operator Workflow",
+                "summary": "Morning checklist and routine tasks",
+                "topics": [
+                    {"name": "Dashboard", "route": "/", "description": "Review attention items and status"},
+                    {"name": "Work Queue", "route": "/work-queue", "description": "Process items needing attention"},
+                    {"name": "Approvals", "route": "/approvals", "description": "Review and approve pending actions"},
+                    {"name": "Connector Health", "route": "/integrations", "description": "Verify external services"},
+                    {"name": "Cost Review", "route": "/costs", "description": "Monitor budget utilization"},
+                ],
+            },
+            {
+                "id": "common-workflows",
+                "title": "Common Workflows",
+                "summary": "Step-by-step guides for frequent tasks",
+                "topics": [
+                    {"name": "Submit Discovery", "route": "/discovery", "description": "Enter new business idea"},
+                    {"name": "Run Scenario", "route": "/scenarios", "description": "Execute a workflow template"},
+                    {"name": "Approve Action", "route": "/approvals", "description": "Review and approve requests"},
+                    {"name": "Resume Workflow", "route": "/recovery", "description": "Handle blocked/paused items"},
+                    {"name": "Check Connectors", "route": "/integrations", "description": "Verify connector health"},
+                ],
+            },
+            {
+                "id": "modes",
+                "title": "Dry-Run vs Live Mode",
+                "summary": "Understanding execution modes",
+                "topics": [
+                    {"name": "Dry-Run Mode", "description": "Safe simulation - no external calls"},
+                    {"name": "Live Mode", "description": "Real execution - requires approval and credentials"},
+                    {"name": "Promotion", "description": "How to enable live mode for operations"},
+                ],
+            },
+            {
+                "id": "recovery",
+                "title": "Recovery Procedures",
+                "summary": "Handling errors and blocked workflows",
+                "topics": [
+                    {"name": "Paused Scenarios", "route": "/recovery/paused", "description": "Resume awaiting workflows"},
+                    {"name": "Failed Jobs", "route": "/recovery/failed", "description": "Retry failed executions"},
+                    {"name": "Active Blockers", "route": "/recovery/blockers", "description": "Resolve blocking issues"},
+                    {"name": "Recovery History", "route": "/recovery/history", "description": "View past recovery actions"},
+                ],
+            },
+            {
+                "id": "safety",
+                "title": "Safety Guidelines",
+                "summary": "Best practices for safe operation",
+                "topics": [
+                    {"name": "Always Do", "description": "Start dry-run, review approvals, check health"},
+                    {"name": "Never Do", "description": "Approve blindly, commit credentials, bypass approvals"},
+                    {"name": "Emergency", "description": "Cancel running actions, review logs"},
+                ],
+            },
+        ],
+        "quick_reference": {
+            "status_check": {"route": "/", "label": "Dashboard"},
+            "work_queue": {"route": "/work-queue", "label": "Work Queue"},
+            "approvals": {"route": "/approvals", "label": "Approvals"},
+            "scenarios": {"route": "/scenarios", "label": "Scenarios"},
+            "templates": {"route": "/templates", "label": "Templates"},
+            "recovery": {"route": "/recovery", "label": "Recovery"},
+        },
+    }
+
+
+def get_quickstart_flows() -> List[Dict[str, Any]]:
+    """
+    Get guided quick-start flows for common operations.
+
+    Returns a list of quick-start flows with steps and routes.
+    """
+    return [
+        {
+            "id": "first-discovery",
+            "name": "Start Discovery",
+            "description": "Submit your first business idea or opportunity",
+            "icon": "lightbulb",
+            "steps": [
+                {"name": "Go to Discovery", "route": "/discovery", "action": "navigate"},
+                {"name": "Enter your idea in the intake form", "action": "input"},
+                {"name": "Add optional tags", "action": "input"},
+                {"name": "Submit and review the opportunity", "action": "submit"},
+            ],
+            "template_id": "discovery_intake",
+            "estimated_time": "< 1 minute",
+        },
+        {
+            "id": "run-research",
+            "name": "Run Research Scenario",
+            "description": "Execute market or competitor research",
+            "icon": "search",
+            "steps": [
+                {"name": "Go to Scenarios", "route": "/scenarios", "action": "navigate"},
+                {"name": "Select a research scenario", "action": "select"},
+                {"name": "Enter your research query", "action": "input"},
+                {"name": "Choose Dry-Run mode", "action": "select"},
+                {"name": "Run and review results", "action": "submit"},
+            ],
+            "template_id": "research_scenario",
+            "estimated_time": "1-2 minutes",
+        },
+        {
+            "id": "test-notification",
+            "name": "Send Test Notification",
+            "description": "Test notification delivery via Telegram or Email",
+            "icon": "bell",
+            "steps": [
+                {"name": "Go to Templates", "route": "/templates", "action": "navigate"},
+                {"name": "Select Notification Test template", "action": "select"},
+                {"name": "Choose channel (Telegram/Email)", "action": "select"},
+                {"name": "Enter test message", "action": "input"},
+                {"name": "Run in dry-run first, then live", "action": "submit"},
+            ],
+            "template_id": "notification_test",
+            "estimated_time": "< 1 minute",
+            "requires_credentials": True,
+        },
+        {
+            "id": "review-approvals",
+            "name": "Review Approvals",
+            "description": "Process pending approval requests",
+            "icon": "check-circle",
+            "steps": [
+                {"name": "Go to Approvals", "route": "/approvals", "action": "navigate"},
+                {"name": "Review pending requests", "action": "review"},
+                {"name": "Click to see details", "action": "click"},
+                {"name": "Approve or Deny with rationale", "action": "submit"},
+            ],
+            "estimated_time": "Variable",
+        },
+        {
+            "id": "check-health",
+            "name": "Inspect Connector Health",
+            "description": "Verify external service connections",
+            "icon": "activity",
+            "steps": [
+                {"name": "Go to Integrations", "route": "/integrations", "action": "navigate"},
+                {"name": "Review connector status cards", "action": "review"},
+                {"name": "Click a connector for details", "action": "click"},
+                {"name": "Run Health Check if needed", "action": "submit"},
+            ],
+            "template_id": "connector_health",
+            "estimated_time": "< 1 minute",
+        },
+        {
+            "id": "resume-work",
+            "name": "Resume Paused Work",
+            "description": "Handle blocked or paused workflows",
+            "icon": "play",
+            "steps": [
+                {"name": "Go to Recovery", "route": "/recovery", "action": "navigate"},
+                {"name": "Review paused scenarios and failed jobs", "action": "review"},
+                {"name": "Identify the blocker", "action": "review"},
+                {"name": "Take action: Resume, Retry, Skip, or Cancel", "action": "submit"},
+            ],
+            "estimated_time": "Variable",
+        },
+    ]
+
+
+# Add template methods to OperatorService class
+def _add_template_methods_to_service():
+    """Add template-related methods to OperatorService."""
+
+    def get_templates(
+        self,
+        category: Optional[str] = None,
+        mode: Optional[str] = None,
+        search_query: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get list of available templates."""
+        registry = get_template_registry()
+
+        if search_query:
+            templates = registry.search_templates(search_query)
+        else:
+            category_enum = TemplateCategory(category) if category else None
+            mode_enum = TemplateMode(mode) if mode else None
+            templates = registry.list_templates(category=category_enum, mode=mode_enum)
+
+        return [t.to_dict() for t in templates]
+
+    def get_template(self, template_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific template by ID."""
+        registry = get_template_registry()
+        template = registry.get_template(template_id)
+        return template.to_dict() if template else None
+
+    def get_template_summary(self) -> Dict[str, Any]:
+        """Get summary of available templates."""
+        registry = get_template_registry()
+        return registry.get_template_summary()
+
+    def launch_template(
+        self,
+        template_id: str,
+        inputs: Dict[str, Any],
+        dry_run: bool = True,
+        launched_by: str = "operator",
+    ) -> Optional[Dict[str, Any]]:
+        """Launch a template with provided inputs."""
+        registry = get_template_registry()
+        launch = registry.launch_template(
+            template_id=template_id,
+            inputs=inputs,
+            dry_run=dry_run,
+            launched_by=launched_by,
+        )
+        if not launch:
+            return None
+
+        # Attempt to execute via scenario system if available
+        template = registry.get_template(template_id)
+        if template:
+            try:
+                # Map template to scenario execution
+                scenario_id = f"template_{template_id}"
+
+                # Check if a matching scenario exists
+                scenario = self.get_scenario(scenario_id)
+                if scenario:
+                    result = self.run_scenario(
+                        scenario_id=scenario_id,
+                        inputs=inputs,
+                        dry_run=dry_run,
+                        triggered_by=launched_by,
+                    )
+                    if result:
+                        registry.update_launch_status(
+                            launch.launch_id,
+                            status="running",
+                            scenario_run_id=result.get("run_id"),
+                        )
+                else:
+                    # No matching scenario - mark as simulation
+                    registry.update_launch_status(
+                        launch.launch_id,
+                        status="completed",
+                        result={
+                            "message": "Template launched in simulation mode",
+                            "inputs": inputs,
+                            "dry_run": dry_run,
+                            "steps_simulated": len(template.steps),
+                        },
+                    )
+            except Exception as e:
+                registry.update_launch_status(
+                    launch.launch_id,
+                    status="failed",
+                    result={"error": str(e)},
+                )
+
+        return registry.get_launch(launch.launch_id).to_dict()
+
+    def get_template_launch(self, launch_id: str) -> Optional[Dict[str, Any]]:
+        """Get a template launch record."""
+        registry = get_template_registry()
+        launch = registry.get_launch(launch_id)
+        return launch.to_dict() if launch else None
+
+    def list_template_launches(
+        self,
+        template_id: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List template launches."""
+        registry = get_template_registry()
+        launches = registry.list_launches(
+            template_id=template_id,
+            status=status,
+            limit=limit,
+        )
+        return [l.to_dict() for l in launches]
+
+    # Add methods to OperatorService
+    OperatorService.get_templates = get_templates
+    OperatorService.get_template = get_template
+    OperatorService.get_template_summary = get_template_summary
+    OperatorService.launch_template = launch_template
+    OperatorService.get_template_launch = get_template_launch
+    OperatorService.list_template_launches = list_template_launches
+
+
+# Initialize template methods
+_add_template_methods_to_service()
+
+
+# =============================================================================
+# End Template Registry and Playbook Methods
+# =============================================================================
+
+
+# =============================================================================
+# Market Discovery Engine Methods
+# =============================================================================
+
+from core.market_discovery import (
+    MarketDiscoveryEngine,
+    DiscoveryInput,
+    DiscoveryResult,
+    OpportunityCandidate,
+    get_discovery_engine,
+)
+from core.opportunity_ranker import get_opportunity_ranker
+from core.discovery_history import (
+    get_discovery_history,
+    CandidateStatus,
+    SignalSource,
+)
+
+
+def run_discovery_scan(
+    mode: str,
+    market: Optional[str] = None,
+    industry: Optional[str] = None,
+    problem_area: Optional[str] = None,
+    customer_type: Optional[str] = None,
+    theme: Optional[str] = None,
+    trend: Optional[str] = None,
+    additional_context: Optional[str] = None,
+    enrich: bool = False,
+) -> Dict[str, Any]:
+    """
+    Run a market discovery scan with optional external enrichment
+
+    Args:
+        mode: Discovery mode (theme_scan, pain_point_scan, industry_scan, problem_exploration)
+        market: Market/industry name
+        industry: Industry name
+        problem_area: Problem domain
+        customer_type: Target customer type
+        theme: Theme/trend
+        trend: Trend name
+        additional_context: Additional context
+        enrich: Enable external signal enrichment (default: False)
+
+    Returns:
+        Discovery result as dictionary
+    """
+    discovery_input = DiscoveryInput(
+        mode=mode,
+        market=market,
+        industry=industry,
+        problem_area=problem_area,
+        customer_type=customer_type,
+        theme=theme,
+        trend=trend,
+        additional_context=additional_context,
+    )
+
+    engine = get_discovery_engine()
+    result = engine.run_discovery(discovery_input, enrich=enrich)
+
+    # Rank candidates
+    ranker = get_opportunity_ranker()
+    ranked_candidates = ranker.rank_candidates(result.candidates)
+
+    # Update result with ranked candidates
+    result.candidates = ranked_candidates
+
+    # Persist to discovery history
+    history = get_discovery_history()
+    enriched = enrich or result.metadata.get("enriched", False)
+    history.persist_scan(result, enriched=enriched)
+
+    # Convert to dict
+    return {
+        "scan_id": result.scan_id,
+        "mode": result.mode,
+        "input_summary": result.input_summary,
+        "candidates": [
+            {
+                "candidate_id": c.candidate_id,
+                "title": c.title,
+                "pain_point": c.pain_point,
+                "target_customer": c.target_customer,
+                "urgency": c.urgency,
+                "monetization_clarity": c.monetization_clarity,
+                "execution_domains": c.execution_domains,
+                "automation_potential": c.automation_potential,
+                "complexity": c.complexity,
+                "recommended_action": c.recommended_action,
+                "confidence": c.confidence,
+                "discovered_via": c.discovered_via,
+                "discovered_at": c.discovered_at,
+            }
+            for c in result.candidates
+        ],
+        "total_candidates": result.total_candidates,
+        "scan_timestamp": result.scan_timestamp,
+        "metadata": result.metadata,
+    }
+
+
+def get_discovery_scan_result(scan_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a discovery scan result from history
+
+    Args:
+        scan_id: Scan ID
+
+    Returns:
+        Discovery result as dictionary or None
+    """
+    history = get_discovery_history()
+    record = history.get_scan(scan_id)
+
+    if not record:
+        # Fallback to engine for backward compatibility
+        engine = get_discovery_engine()
+        result = engine.get_scan_result(scan_id)
+        if not result:
+            return None
+
+        return {
+            "scan_id": result.scan_id,
+            "mode": result.mode,
+            "input_summary": result.input_summary,
+            "candidates": [
+                {
+                    "candidate_id": c.candidate_id,
+                    "title": c.title,
+                    "pain_point": c.pain_point,
+                    "target_customer": c.target_customer,
+                    "urgency": c.urgency,
+                    "monetization_clarity": c.monetization_clarity,
+                    "execution_domains": c.execution_domains,
+                    "automation_potential": c.automation_potential,
+                    "complexity": c.complexity,
+                    "recommended_action": c.recommended_action,
+                    "confidence": c.confidence,
+                    "discovered_via": c.discovered_via,
+                    "discovered_at": c.discovered_at,
+                }
+                for c in result.candidates
+            ],
+            "total_candidates": result.total_candidates,
+            "scan_timestamp": result.scan_timestamp,
+            "metadata": result.metadata,
+        }
+
+    return record.to_dict()
+
+
+def list_discovery_scans(limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    List recent discovery scans from history
+
+    Args:
+        limit: Maximum number of scans to return
+
+    Returns:
+        List of discovery scan summaries
+    """
+    history = get_discovery_history()
+    scans = history.list_scans(limit=limit)
+
+    return [
+        {
+            "scan_id": scan.scan_id,
+            "mode": scan.mode,
+            "input_summary": scan.input_summary,
+            "total_candidates": scan.total_candidates,
+            "scan_timestamp": scan.scan_timestamp,
+            "converted_count": scan.converted_count,
+            "archived_count": scan.archived_count,
+            "ignored_count": scan.ignored_count,
+        }
+        for scan in scans
+    ]
+
+
+def filter_discovery_scans(
+    mode: Optional[str] = None,
+    theme: Optional[str] = None,
+    industry: Optional[str] = None,
+    problem: Optional[str] = None,
+    has_conversions: Optional[bool] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Filter discovery scans with advanced criteria
+
+    Args:
+        mode: Filter by discovery mode
+        theme: Theme keyword search
+        industry: Industry keyword search
+        problem: Problem keyword search
+        has_conversions: Filter by conversion status
+        limit: Maximum results
+
+    Returns:
+        Filtered list of discovery scan summaries
+    """
+    history = get_discovery_history()
+    scans = history.filter_scans(
+        mode=mode,
+        theme=theme,
+        industry=industry,
+        problem=problem,
+        has_conversions=has_conversions,
+        limit=limit,
+    )
+
+    return [
+        {
+            "scan_id": scan.scan_id,
+            "mode": scan.mode,
+            "input_summary": scan.input_summary,
+            "total_candidates": scan.total_candidates,
+            "scan_timestamp": scan.scan_timestamp,
+            "converted_count": scan.converted_count,
+            "archived_count": scan.archived_count,
+            "ignored_count": scan.ignored_count,
+        }
+        for scan in scans
+    ]
+
+
+def get_discovery_candidate(candidate_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific discovery candidate with enrichment data
+
+    Args:
+        candidate_id: Candidate ID
+
+    Returns:
+        Enriched candidate data or None
+    """
+    history = get_discovery_history()
+    candidate = history.get_candidate(candidate_id)
+
+    if not candidate:
+        return None
+
+    return candidate.to_dict()
+
+
+def convert_candidate_to_opportunity(
+    candidate_id: str,
+    opportunity_id: str,
+) -> bool:
+    """
+    Mark a discovery candidate as converted to an opportunity
+
+    Args:
+        candidate_id: Candidate ID
+        opportunity_id: Created opportunity ID
+
+    Returns:
+        True if successful
+    """
+    history = get_discovery_history()
+    return history.mark_converted(candidate_id, opportunity_id)
+
+
+def archive_candidate(candidate_id: str, reason: str) -> bool:
+    """
+    Archive a discovery candidate
+
+    Args:
+        candidate_id: Candidate ID
+        reason: Reason for archiving
+
+    Returns:
+        True if successful
+    """
+    history = get_discovery_history()
+    return history.mark_archived(candidate_id, reason)
+
+
+def get_discovery_conversion_stats() -> Dict[str, Any]:
+    """
+    Get discovery conversion statistics
+
+    Returns:
+        Conversion metrics and statistics
+    """
+    history = get_discovery_history()
+    return history.get_conversion_stats()
+
+
+# Add discovery methods to OperatorService
+def _add_discovery_methods_to_service():
+    """Add discovery methods to OperatorService"""
+
+    def run_discovery_scan_method(self, *args, **kwargs):
+        return run_discovery_scan(*args, **kwargs)
+
+    def get_discovery_scan_result_method(self, *args, **kwargs):
+        return get_discovery_scan_result(*args, **kwargs)
+
+    def list_discovery_scans_method(self, *args, **kwargs):
+        return list_discovery_scans(*args, **kwargs)
+
+    OperatorService.run_discovery_scan = run_discovery_scan_method
+    OperatorService.get_discovery_scan_result = get_discovery_scan_result_method
+    OperatorService.list_discovery_scans = list_discovery_scans_method
+
+
+# Initialize discovery methods
+_add_discovery_methods_to_service()
+
+
+# =============================================================================
+# End Market Discovery Engine Methods
+# =============================================================================
